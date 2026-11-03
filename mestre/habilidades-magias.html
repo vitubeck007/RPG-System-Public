@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Habilidades e Magias • Painel do Mestre - RPG VTT</title>
+
+    <!-- Tailwind CSS (CDN) e as cores/fontes do painel -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/mestre/JS/tailwind-config.js"></script>
+
+    <!-- Socket.io Client -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- Regras compartilhadas com a ficha (catálogo de perícias, modificadores, escape de HTML...) -->
+    <script src="/JS/regras.js"></script>
+
+    <link rel="stylesheet" href="/CSS/rpg-ui.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="/mestre/CSS/mestre.css">
+    <link rel="stylesheet" href="/mestre/CSS/painel-visual.css">
+</head>
+
+<body class="rpg-app master-app flex flex-col">
+    <a class="rpg-skip" href="#mestre-conteudo">Pular para o conteúdo</a>
+
+    <!-- Menu e conexão: montados pelo comum.js -->
+    <header id="mestre-cabecalho" data-pagina="habilidades-magias"></header>
+
+    <main id="mestre-conteudo" tabindex="-1" class="master-main space-y-6">
+
+        <div class="master-section-heading">
+            <div class="flex gap-2" role="tablist" aria-label="Tipo de poder">
+                <button id="habmag-aba-habilidades" type="button" role="tab" aria-controls="habmag-catalogo"
+                    class="px-3 py-1.5 rounded text-xs font-mono border border-dungeon-700">Habilidades</button>
+                <button id="habmag-aba-magias" type="button" role="tab" aria-controls="habmag-catalogo"
+                    class="px-3 py-1.5 rounded text-xs font-mono border border-dungeon-700">Magias</button>
+            </div>
+        </div>
+
+        <section id="habmag-enviar" class="habmag-entrega" aria-labelledby="habmag-entrega-titulo">
+            <div class="habmag-entrega-controles">
+                <h3 id="habmag-entrega-titulo">Entregar para</h3>
+                <select id="habmag-personagem" aria-label="Personagem que receberá o poder"></select>
+                <button id="habmag-atualizar-personagens" type="button" aria-label="Atualizar lista de personagens"
+                    title="Atualizar lista"><i class="fa-solid fa-rotate" aria-hidden="true"></i></button>
+            </div>
+        </section>
+
+        <div id="habmag-layout">
+            <!-- Catálogo: lista, busca e ações de cada entrada -->
+            <section id="habmag-catalogo" role="tabpanel" aria-labelledby="habmag-aba-habilidades"
+                class="lg:col-span-2 bg-dungeon-900 border border-dungeon-700 rounded-xl p-4 shadow-xl space-y-3 rpg-grimorio-panel">
+                <div class="master-filters">
+                    <input id="habmag-busca" aria-label="Buscar poderes por nome, dano ou descrição" type="search"
+                        maxlength="80" placeholder="Buscar por nome, tipo de dano, descrição…"
+                        class="flex-1 bg-dungeon-950 border border-dungeon-700 rounded px-3 py-1.5 text-xs font-mono">
+                    <button id="habmag-novo" type="button"
+                        class="px-3 py-1.5 rounded text-xs font-mono bg-amberGold-600 text-white">+ Nova</button>
+                </div>
+                <div id="habmag-lista" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+                <span class="rpg-grimorio-arte" aria-hidden="true"><span class="rpg-grimorio-topo"></span><span class="rpg-grimorio-emblema"></span><span class="rpg-grimorio-rodape"></span></span>
+            </section>
+
+            <!-- Editor -->
+            <section id="habmag-editor"
+                class="bg-dungeon-900 border border-dungeon-700 rounded-xl p-4 shadow-xl space-y-2 hidden">
+                <h3 id="hm-titulo" class="font-cinzel font-bold text-amber-200 text-sm"></h3>
+                <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+                    <label class="col-span-2">Nome<input id="hm-nome" maxlength="80"
+                            class="w-full bg-dungeon-950 border border-dungeon-700 rounded px-2 py-1"></label>
+                    <div id="hm-imagem-secao" class="col-span-2"><label>Imagem do poder<input id="hm-imagem"
+                                data-editor-imagem-mestre maxlength="2000"
+                                placeholder="Escolha uma imagem ou informe uma URL"></label></div>
+                    <section id="hm-fundo-secao" class="col-span-2 rpg-fundo-poder-editor"
+                        aria-labelledby="hm-fundo-titulo">
+                        <div class="rpg-fundo-poder-cabecalho"><label id="hm-fundo-titulo" for="hm-estilo-fundo">Layout
+                                de fundo</label><select id="hm-estilo-fundo" data-fundo-poder
+                                data-imagem-poder="hm-imagem" data-previa-poder="hm-fundo-previa">
+                                <option value="0">Sem fundo</option>
+                            </select></div>
+                        <div id="hm-fundo-previa"></div>
+                    </section>
+                    <div id="hm-aparencia" class="col-span-2 master-appearance">
+                        <div class="master-appearance-fields" data-aparencia-visual></div>
+                        <details>
+                            <summary>Avançado: ícone personalizado</summary>
+                            <p class="rpg-hint">Opcional. Um ícone personalizado existente não é substituído ao abrir a
+                                edição.</p>
+                            <label>Classe do ícone<input id="hm-icon" maxlength="40" placeholder="Ex.: fa-fire"
+                                    class="w-full bg-dungeon-950 border border-dungeon-700 rounded px-2 py-1"></label>
+                        </details>
+                    </div>
+                    <label>Dado<input id="hm-dice" data-validar-dados="poder" maxlength="30" placeholder="1d6+1d4+2"
+                            class="w-full bg-dungeon-950 border border-dungeon-700 rounded px-2 py-1"></label>
+                    <label>Tipo de dano<input id="hm-tipoDano" maxlength="40"
+                            class="w-full bg-dungeon-950 border border-dungeon-700 rounded px-2 py-1"></label>
+                    <label>Custo
+                        <span class="flex gap-1">
+                            <select id="hm-custo-vital" aria-label="Recurso consumido"
+                                class="bg-dungeon-950 border border-dungeon-700 rounded px-1 py-1">
+                                <option value="">nenhum</option>
+                                <option value="hp">Vida</option>
+                                <option value="vigor">Vigor</option>
+                                <option value="sanity">Sanidade</option>
+                            </select>
+                            <input id="hm-custo-valor" aria-label="Quantidade do custo" type="number" min="0"
+                                max="100000" value="0"
+                                class="w-14 bg-dungeon-950 border border-dungeon-700 rounded px-1 py-1">
+                        </span>
+                    </label>
+                    <label>Ação<input id="hm-acao" maxlength="60"
+                            class="w-full bg-dungeon-950 border border-dungeon-700 rounded px-2 py-1"></label>
+                    <label>Alcance<input id="hm-alcance" maxlength="60"
+                            class="w-full bg-dungeon-950 border border-dungeon-700 rounded px-2 py-1"></label>
+                    <label>Duração<input id="hm-duracao" maxlength="60"
+                            class="w-full bg-dungeon-950 border border-dungeon-700 rounded px-2 py-1"></label>
+                    <label>Requisitos<input id="hm-requisitos" maxlength="200"
+                            class="w-full bg-dungeon-950 border border-dungeon-700 rounded px-2 py-1"></label>
+                    <label class="col-span-2">Descrição (aparece na ficha)<textarea id="hm-desc" rows="3"
+                            maxlength="2000"
+                            class="w-full bg-dungeon-950 border border-dungeon-700 rounded px-2 py-1"></textarea></label>
+                    <label class="col-span-2">Efeito<textarea id="hm-efeitos" rows="4" maxlength="4000"
+                            placeholder="O que faz nas regras? Condições, bônus e consequências."
+                            class="w-full bg-dungeon-950 border border-dungeon-700 rounded px-2 py-1"></textarea></label>
+                    <label class="col-span-2">Descrição longa (só do mestre)<textarea id="hm-descLonga" rows="3"
+                            maxlength="4000"
+                            class="w-full bg-dungeon-950 border border-dungeon-700 rounded px-2 py-1"></textarea></label>
+                    <label class="col-span-2 flex items-center gap-2"><input id="hm-publico" type="checkbox"> Público
+                        (jogadores veem no catálogo da ficha; desmarcado = só por entrega)</label>
+                </div>
+                <div class="flex gap-2 pt-1">
+                    <button id="hm-salvar" type="button"
+                        class="px-3 py-1.5 rounded text-xs font-mono bg-amberGold-600 text-white">Salvar</button>
+                    <button id="hm-cancelar" type="button"
+                        class="px-3 py-1.5 rounded text-xs font-mono border border-dungeon-700">Cancelar</button>
+                </div>
+            </section>
+        </div>
+
+    </main>
+
+    <script src="/JS/interface.js"></script>
+    <script src="/JS/editor-imagem.js"></script>
+    <script src="/JS/fundos-poderes.js"></script>
+    <script src="/mestre/JS/aparencia.js"></script>
+    <script src="/mestre/JS/comum.js"></script>
+    <script src="/mestre/JS/habilidades-magias.js"></script>
+</body>
+
+</html>

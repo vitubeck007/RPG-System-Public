@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b1118">
+  <title>Seus personagens — Grimório RPG</title>
+  <link rel="stylesheet" href="/CSS/rpg-ui.css">
+  <link rel="stylesheet" href="/CSS/acesso.css">
+</head>
+<body class="rpg-app">
+  <div class="access-shell" data-modal-background>
+    <a class="rpg-skip" href="#selection-main">Pular para os personagens</a>
+    <header class="rpg-topbar">
+      <div class="rpg-topbar-inner">
+        <div class="rpg-brand" aria-label="Grimório RPG">
+          <span class="rpg-sigil"><svg class="rpg-icon" aria-hidden="true"><use href="/CSS/icones.svg#book"></use></svg></span>
+          <span class="rpg-brand-name">Grimório<span class="rpg-brand-caption">RPG · Ficha de campanha</span></span>
+        </div>
+        <div class="account-menu">
+          <span class="account-name"><span class="account-prefix">Jogador · </span><strong id="user-display-name">Aventureiro</strong></span>
+          <button id="btn-logout" type="button" class="rpg-btn rpg-btn--quiet" onclick="deslogar()">
+            <svg class="rpg-icon" aria-hidden="true"><use href="/CSS/icones.svg#logout"></use></svg>Sair
+          </button>
+        </div>
+      </div>
+    </header>
+    <main id="selection-main" class="selection-main" tabindex="-1">
+      <div class="selection-heading">
+        <div>
+          <span class="rpg-eyebrow">Antes da aventura</span>
+          <h1 id="section-title">Seus personagens</h1>
+          <p>Escolha quem vai viver o próximo capítulo.</p>
+        </div>
+        <button id="btn-toggle-delete" type="button" class="rpg-btn rpg-btn--quiet" onclick="toggleModoExcluir()" aria-pressed="false">
+          <svg class="rpg-icon" aria-hidden="true"><use id="btn-delete-icon" href="/CSS/icones.svg#trash"></use></svg>
+          <span id="btn-delete-text">Excluir personagem</span>
+        </button>
+      </div>
+      <p id="delete-mode-notice" class="selection-notice" hidden>Modo de exclusão: escolha um personagem para revisar a exclusão. Nada será apagado sem sua confirmação.</p>
+      <div id="characters-list" class="characters-list" aria-busy="true" aria-labelledby="section-title">
+        <div id="characters-loading" class="rpg-card selection-state" role="status"><p>Carregando seus personagens…</p></div>
+      </div>
+      <button id="btn-novo-personagem" type="button" class="rpg-btn new-character" onclick="abrirModalNovoPersonagem()">
+        <svg class="rpg-icon" aria-hidden="true"><use href="/CSS/icones.svg#plus"></use></svg>Novo personagem
+      </button>
+      <p id="selection-message" class="rpg-message" role="status" aria-live="polite" aria-atomic="true"></p>
+    </main>
+    <footer class="access-footer">Grimório RPG · Cada personagem, uma história.</footer>
+  </div>
+
+  <div id="modal-confirmar-exclusao" class="rpg-modal" role="dialog" aria-modal="true" aria-labelledby="delete-title" aria-describedby="delete-description exclusao-nome-alvo" tabindex="-1" hidden>
+    <section class="rpg-modal-panel">
+      <div class="rpg-modal-heading">
+        <div><span class="rpg-eyebrow">Uma decisão permanente</span><h2 id="delete-title">Excluir personagem?</h2></div>
+        <button type="button" class="rpg-btn rpg-btn--quiet rpg-btn--icon" onclick="cancelarExclusao()" aria-label="Fechar confirmação">
+          <svg class="rpg-icon" aria-hidden="true"><use href="/CSS/icones.svg#close"></use></svg>
+        </button>
+      </div>
+      <p id="delete-description" class="rpg-muted">A pasta e os dados deste personagem serão excluídos. Essa ação não pode ser desfeita.</p>
+      <p id="exclusao-nome-alvo" class="delete-target"></p>
+      <p id="delete-message" class="rpg-message" role="status" aria-live="polite" aria-atomic="true"></p>
+      <div class="rpg-modal-actions">
+        <button id="delete-cancel" type="button" class="rpg-btn" onclick="cancelarExclusao()">Manter personagem</button>
+        <button id="delete-confirm" type="button" class="rpg-btn rpg-btn--danger" onclick="confirmarExclusao()">Excluir definitivamente</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="modal-novo" class="rpg-modal" role="dialog" aria-modal="true" aria-labelledby="new-title" aria-describedby="new-description" tabindex="-1" hidden>
+    <form novalidate id="new-character-form" class="rpg-modal-panel">
+      <div class="rpg-modal-heading">
+        <div><span class="rpg-eyebrow">Uma nova história</span><h2 id="new-title">Novo personagem</h2></div>
+        <button type="button" class="rpg-btn rpg-btn--quiet rpg-btn--icon" onclick="fecharModalNovoPersonagem()" aria-label="Fechar criação">
+          <svg class="rpg-icon" aria-hidden="true"><use href="/CSS/icones.svg#close"></use></svg>
+        </button>
+      </div>
+      <p id="new-description" class="rpg-muted">Dê um nome ao personagem. Os demais detalhes serão preenchidos na ficha.</p>
+      <div class="rpg-field">
+        <label for="novo-nome-input">Nome do personagem</label>
+        <input type="text" id="novo-nome-input" class="rpg-input" placeholder="Como ele será conhecido?" required maxlength="40" autocomplete="off">
+      </div>
+      <p id="new-message" class="rpg-message" role="status" aria-live="polite" aria-atomic="true"></p>
+      <div class="rpg-modal-actions">
+        <button type="button" class="rpg-btn" onclick="fecharModalNovoPersonagem()">Cancelar</button>
+        <button id="new-confirm" type="submit" class="rpg-btn rpg-btn--primary">Criar personagem</button>
+      </div>
+    </form>
+  </div>
+  <script src="/JS/interface.js"></script>
+  <script>
+    let modoExcluirAtivo = false;
+    let personagemAlvoParaExcluir = null;
+    let exclusaoEmAndamento = false;
+    let criacaoEmAndamento = false;
+    let listaEmCarregamento = false;
+    let resultadoMutanteIncerto = false;
+    const usuarioAtual = sessionStorage.getItem('rpg_player');
+    const tokenSessao = sessionStorage.getItem('rpg_token');
+    const aviso = document.getElementById('selection-message');
+    if (!usuarioAtual || !tokenSessao) {
+      window.location.replace('/login');
+    } else {
+      document.getElementById('user-display-name').textContent = usuarioAtual;
+    }
+
+    // Ícones locais; nomes são definidos pelo código, nunca pelo dado do personagem.
+    function icone(nome) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('class', 'rpg-icon');
+      svg.setAttribute('aria-hidden', 'true');
+      const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      use.setAttribute('href', '/CSS/icones.svg#' + nome);
+      svg.appendChild(use);
+      return svg;
+    }
+
+    function estadoLista(titulo, texto, erro = false) {
+      const painel = document.createElement('div');
+      painel.className = 'rpg-card selection-state';
+      painel.dataset.state = erro ? 'error' : 'empty';
+      const heading = document.createElement('h2');
+      heading.textContent = titulo;
+      const descricao = document.createElement('p');
+      descricao.textContent = texto;
+      painel.append(icone('book'), heading, descricao);
+      if (erro) {
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.className = 'rpg-btn';
+        retry.textContent = 'Tentar novamente';
+        retry.addEventListener('click', carregarPersonagens);
+        painel.appendChild(retry);
+      }
+      document.getElementById('characters-list').replaceChildren(painel);
+    }
+
+    async function carregarPersonagens() {
+      if (listaEmCarregamento) return;
+      listaEmCarregamento = true;
+      if (aviso.dataset.state === 'error') RPGUI.mensagem(aviso);
+      const lista = document.getElementById('characters-list');
+      lista.setAttribute('aria-busy', 'true');
+      document.getElementById('btn-toggle-delete').disabled = true;
+      try {
+        const { response, result } = await RPGUI.pedirJSON('/api/personagens', {
+          headers: { Authorization: `Bearer ${tokenSessao}` },
+        });
+        if (response.status === 401 || response.status === 403) {
+          sessionStorage.removeItem('rpg_token');
+          sessionStorage.removeItem('rpg_player');
+          window.location.replace('/login');
+          return;
+        }
+        if (!response.ok || !result.success) throw new Error(result.message || 'Não foi possível carregar.');
+        lista.replaceChildren();
+        if (!result.personagens.length) {
+          estadoLista('A primeira página está em branco', 'Você ainda não tem personagens. Crie o primeiro para começar sua história.');
+        }
+        result.personagens.forEach((personagem, index) => {
+          const cardId = 'character-' + index;
+          const card = document.createElement('div');
+          card.dataset.characterCard = '';
+          card.dataset.id = cardId;
+          card.className = 'rpg-card character-card';
+
+          const jogar = document.createElement('button');
+          jogar.type = 'button';
+          jogar.className = 'character-select';
+          jogar.setAttribute('aria-label', 'Jogar com ' + personagem.nome);
+          jogar.addEventListener('click', () => handleCardClick(cardId, personagem));
+          const inicial = document.createElement('span');
+          inicial.className = 'character-monogram';
+          inicial.setAttribute('aria-hidden', 'true');
+          inicial.textContent = Array.from(personagem.nome.trim())[0]?.toLocaleUpperCase('pt-BR') || '?';
+          const copy = document.createElement('span');
+          copy.className = 'character-copy';
+          const label = document.createElement('span');
+          label.className = 'character-name';
+          label.textContent = personagem.nome;
+          const action = document.createElement('span');
+          action.className = 'character-action';
+          action.append(document.createTextNode('Abrir ficha'), icone('arrow'));
+          copy.append(label, action);
+          jogar.append(inicial, copy);
+
+          const trash = document.createElement('button');
+          trash.type = 'button';
+          trash.className = 'trash-icon rpg-btn rpg-btn--danger rpg-btn--icon';
+          trash.hidden = true;
+          trash.setAttribute('aria-label', 'Excluir ' + personagem.nome);
+          trash.appendChild(icone('trash'));
+          trash.addEventListener('click', (event) => iniciarExclusao(event, cardId, personagem));
+          card.append(jogar, trash);
+          lista.appendChild(card);
+        });
+        atualizarCardsVisualExclusao();
+        return true;
+      } catch (error) {
+        estadoLista('Não foi possível abrir a lista', 'Verifique a conexão e tente novamente. Sua sessão não foi encerrada.', true);
+        RPGUI.mensagem(aviso, 'Falha ao carregar os personagens.', 'error');
+        return false;
+      } finally {
+        listaEmCarregamento = false;
+        lista.setAttribute('aria-busy', 'false');
+        document.getElementById('btn-toggle-delete').disabled = !lista.querySelector('.character-card');
+      }
+    }
+    if (usuarioAtual && tokenSessao) carregarPersonagens();
+
+    let encerrandoSessao = false;
+    async function deslogar() {
+      if (encerrandoSessao) return;
+      encerrandoSessao = true;
+      const botao = document.getElementById('btn-logout');
+      botao.disabled = true;
+      botao.setAttribute('aria-busy', 'true');
+      try {
+        const { response, result } = await RPGUI.pedirJSON('/api/logout', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { Authorization: `Bearer ${tokenSessao}` },
+        });
+        if (!response.ok || !result.success) throw new Error('Saída não confirmada.');
+        ['rpg_player', 'rpg_token', 'rpg_character', 'rpg_character_name'].forEach(key => sessionStorage.removeItem(key));
+        window.location.replace('/login');
+      } catch {
+        RPGUI.mensagem(aviso, 'Não foi possível confirmar a saída. Confira a conexão e clique em Sair novamente.', 'error');
+      } finally {
+        encerrandoSessao = false;
+        botao.disabled = false;
+        botao.removeAttribute('aria-busy');
+      }
+    }
+
+    function toggleModoExcluir() {
+      modoExcluirAtivo = !modoExcluirAtivo;
+      const btn = document.getElementById('btn-toggle-delete');
+      btn.classList.toggle('rpg-btn--danger', modoExcluirAtivo);
+      btn.setAttribute('aria-pressed', String(modoExcluirAtivo));
+      document.getElementById('btn-delete-text').textContent = modoExcluirAtivo ? 'Concluir exclusões' : 'Excluir personagem';
+      document.getElementById('btn-delete-icon').setAttribute('href', '/CSS/icones.svg#' + (modoExcluirAtivo ? 'close' : 'trash'));
+      document.getElementById('delete-mode-notice').hidden = !modoExcluirAtivo;
+      document.getElementById('btn-novo-personagem').disabled = modoExcluirAtivo;
+      atualizarCardsVisualExclusao();
+    }
+
+    function atualizarCardsVisualExclusao() {
+      document.querySelectorAll('.character-card').forEach((card) => {
+        card.dataset.delete = String(modoExcluirAtivo);
+        card.querySelector('.trash-icon').hidden = !modoExcluirAtivo;
+        const nome = card.querySelector('.character-name').textContent;
+        card.querySelector('.character-select').setAttribute('aria-label', (modoExcluirAtivo ? 'Revisar exclusão de ' : 'Jogar com ') + nome);
+        const action = card.querySelector('.character-action');
+        action.replaceChildren(document.createTextNode(modoExcluirAtivo ? 'Revisar exclusão' : 'Abrir ficha'), icone(modoExcluirAtivo ? 'trash' : 'arrow'));
+      });
+    }
+
+    function handleCardClick(cardId, personagem) {
+      if (modoExcluirAtivo) iniciarExclusao(null, cardId, personagem);
+      else selecionarPersonagem(personagem);
+    }
+
+    function selecionarPersonagem(personagem) {
+      sessionStorage.setItem('rpg_character', JSON.stringify({
+        player: usuarioAtual,
+        nomePasta: personagem.nomePasta,
+      }));
+      sessionStorage.setItem('rpg_character_name', personagem.nome);
+      window.location.href = '/';
+    }
+
+    function ocuparModal(id, ocupado) {
+      const modal = document.getElementById(id);
+      modal.dataset.busy = String(ocupado);
+      modal.setAttribute('aria-busy', String(ocupado));
+      modal.querySelectorAll('button, input').forEach((el) => { el.disabled = ocupado; });
+      if (ocupado) modal.focus();
+    }
+
+    function iniciarExclusao(event, cardId, personagem) {
+      if (event) event.stopPropagation();
+      if (exclusaoEmAndamento) return;
+      personagemAlvoParaExcluir = { cardId, ...personagem };
+      document.getElementById('exclusao-nome-alvo').textContent = personagem.nome;
+      RPGUI.mensagem(document.getElementById('delete-message'));
+      RPGUI.abrirModal('modal-confirmar-exclusao', 'delete-cancel');
+      if (resultadoMutanteIncerto) oferecerReconsulta(document.getElementById('delete-message'), 'Há uma operação sem confirmação. Atualize a lista antes de excluir.');
+    }
+
+    function cancelarExclusao() {
+      if (exclusaoEmAndamento) return;
+      personagemAlvoParaExcluir = null;
+      RPGUI.fecharModal('modal-confirmar-exclusao');
+    }
+
+    async function confirmarExclusao() {
+      if (!personagemAlvoParaExcluir || exclusaoEmAndamento || resultadoMutanteIncerto) return;
+      const alvo = personagemAlvoParaExcluir;
+      exclusaoEmAndamento = true;
+      ocuparModal('modal-confirmar-exclusao', true);
+      const mensagem = document.getElementById('delete-message');
+      RPGUI.mensagem(mensagem, 'Excluindo personagem…', 'loading');
+      try {
+        const { response, result } = await RPGUI.pedirJSON('/api/personagens/' + encodeURIComponent(alvo.nomePasta), {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${tokenSessao}` },
+        });
+        if (!response.ok || !result.success) {
+          RPGUI.mensagem(mensagem, result.message || 'Não foi possível excluir o personagem.', 'error');
+          return;
+        }
+        const selecionado = JSON.parse(sessionStorage.getItem('rpg_character') || 'null');
+        if (selecionado?.player === usuarioAtual && selecionado.nomePasta === alvo.nomePasta) {
+          sessionStorage.removeItem('rpg_character');
+          sessionStorage.removeItem('rpg_character_name');
+        }
+        exclusaoEmAndamento = false;
+        ocuparModal('modal-confirmar-exclusao', false);
+        cancelarExclusao();
+        RPGUI.mensagem(aviso, alvo.nome + ' foi excluído.', 'success');
+        await carregarPersonagens();
+        if (!document.querySelector('.character-card') && modoExcluirAtivo) toggleModoExcluir();
+        document.getElementById('btn-toggle-delete').disabled
+          ? document.getElementById('btn-novo-personagem').focus()
+          : document.getElementById('btn-toggle-delete').focus();
+      } catch (error) {
+        oferecerReconsulta(mensagem, 'Não foi possível confirmar a exclusão. Ela pode ter sido concluída. Atualize a lista antes de repetir.');
+      } finally {
+        exclusaoEmAndamento = false;
+        ocuparModal('modal-confirmar-exclusao', false);
+        document.getElementById('delete-confirm').disabled = resultadoMutanteIncerto;
+        if (!document.getElementById('modal-confirmar-exclusao').hidden) document.getElementById('delete-cancel').focus();
+      }
+    }
+
+    function abrirModalNovoPersonagem() {
+      if (modoExcluirAtivo) return;
+      RPGUI.mensagem(document.getElementById('new-message'));
+      RPGUI.abrirModal('modal-novo', 'novo-nome-input');
+      if (resultadoMutanteIncerto) oferecerReconsulta(document.getElementById('new-message'), 'Há uma operação sem confirmação. Atualize a lista antes de criar.');
+    }
+
+    function fecharModalNovoPersonagem() {
+      if (criacaoEmAndamento) return;
+      RPGUI.fecharModal('modal-novo');
+      document.getElementById('novo-nome-input').value = '';
+    }
+
+    async function confirmarNovoPersonagem() {
+      const form = document.getElementById('new-character-form');
+      if (criacaoEmAndamento || resultadoMutanteIncerto || !RPGUI.validarFormulario(form)) return;
+      const nome = document.getElementById('novo-nome-input').value.trim();
+      const mensagem = document.getElementById('new-message');
+      if (!nome) {
+        RPGUI.mensagem(mensagem, 'Informe o nome do personagem.', 'error');
+        document.getElementById('novo-nome-input').focus();
+        return;
+      }
+      criacaoEmAndamento = true;
+      ocuparModal('modal-novo', true);
+      RPGUI.mensagem(mensagem, 'Criando personagem…', 'loading');
+      try {
+        const { response, result } = await RPGUI.pedirJSON('/api/personagens', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokenSessao}` },
+          body: JSON.stringify({ nome }),
+        });
+        if (!response.ok || !result.success) {
+          RPGUI.mensagem(mensagem, result.message || 'Não foi possível criar o personagem.', 'error');
+          return;
+        }
+        criacaoEmAndamento = false;
+        ocuparModal('modal-novo', false);
+        fecharModalNovoPersonagem();
+        RPGUI.mensagem(aviso, nome + ' foi criado. Sua ficha está pronta para abrir.', 'success');
+        await carregarPersonagens();
+      } catch (error) {
+        oferecerReconsulta(mensagem, 'Não foi possível confirmar a criação. Ela pode ter sido concluída. Atualize a lista antes de repetir.');
+      } finally {
+        criacaoEmAndamento = false;
+        ocuparModal('modal-novo', false);
+        document.getElementById('new-confirm').disabled = resultadoMutanteIncerto;
+        if (!document.getElementById('modal-novo').hidden) document.getElementById('novo-nome-input').focus();
+      }
+    }
+
+    function oferecerReconsulta(mensagem, texto) {
+      resultadoMutanteIncerto = true;
+      RPGUI.mensagem(mensagem, texto, 'error');
+      // Fica fora da mensagem, que pode ser atualizada, e continua disponível ao reabrir.
+      let botao = document.getElementById('reconsultar-personagens');
+      if (!botao) {
+        botao = document.createElement('button'); botao.id = 'reconsultar-personagens';
+        botao.type = 'button'; botao.className = 'rpg-btn';
+      }
+      botao.textContent = 'Atualizar lista e conferir resultado';
+      mensagem.insertAdjacentElement('afterend', botao);
+      botao.onclick = async () => {
+        botao.disabled = true;
+        const atualizou = await carregarPersonagens();
+        botao.disabled = false;
+        if (!atualizou) return;
+        resultadoMutanteIncerto = false;
+        document.getElementById('delete-confirm').disabled = false;
+        document.getElementById('new-confirm').disabled = false;
+        RPGUI.mensagem(mensagem, 'Lista atualizada. Confira nela se a operação foi concluída antes de repetir.', 'success');
+        botao.remove();
+        // Fecha sem apagar o nome digitado. A lista é a confirmação do resultado desconhecido.
+        RPGUI.fecharModal('modal-novo');
+        RPGUI.fecharModal('modal-confirmar-exclusao');
+      };
+    }
+
+    document.getElementById('new-character-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      confirmarNovoPersonagem();
+    });
+    document.getElementById('modal-novo').addEventListener('rpg:cancelar', fecharModalNovoPersonagem);
+    document.getElementById('modal-confirmar-exclusao').addEventListener('rpg:cancelar', cancelarExclusao);
+  </script>
+</body>
+</html>

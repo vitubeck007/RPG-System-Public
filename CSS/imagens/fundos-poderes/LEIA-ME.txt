@@ -1,0 +1,20 @@
+FUNDOS DE HABILIDADES E MAGIAS
+
+Coloque nesta pasta suas imagens PNG com estes nomes exatos:
+estilo-1.png
+estilo-2.png
+estilo-3.png
+estilo-4.png
+estilo-5.png
+estilo-6.png
+estilo-7.png
+estilo-8.png
+
+No editor, selecione o estilo correspondente em "Layout de fundo".
+"Sem fundo" preserva a aparência anterior. Arquivos ausentes não impedem salvar.
+Sugestão: proporção 16:9, por exemplo 1280 x 720 pixels.
+O fundo preenche a área de arte; a imagem do poder aparece inteira por cima.
+O fundo não é gravado junto com a imagem: trocar o arquivo atualiza os poderes
+que usam aquele estilo (recarregue a página para atualizar a prévia).
+
+Estes fundos são recursos visuais públicos do sistema. Não coloque dados privados aqui.

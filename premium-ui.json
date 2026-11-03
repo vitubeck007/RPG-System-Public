@@ -1,0 +1,11 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": ["CSS", "JS", "mestre", "login"],
+  "locale": "pt-BR",
+  "canonicalMap": "documentacao/UX-CONTRACT.md",
+  "requiredCapabilities": ["Select/Listbox", "Form", "Scrollbar", "Toast", "CRUD"],
+  "ownership": { "Select/Listbox": "native" },
+  "requiredCommands": ["focused"],
+  "commands": { "focused": "node --test --test-concurrency=1 testes/editores-visuais.test.js testes/loot-card-item.test.js testes/acesso-visual.test.js testes/mestre-sem-token.test.js testes/notificacao-vital.test.js" },
+  "evidence": { "crudFullFlow": "testes/loot-card-item.test.js", "failurePaths": "testes/loot-card-item.test.js" }
+}

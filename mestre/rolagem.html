@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rolagens • Painel do Mestre</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/JS/regras.js"></script>
+  <link rel="stylesheet" href="/CSS/rpg-ui.css">
+  <link rel="stylesheet" href="/mestre/CSS/mestre.css">
+  <link rel="stylesheet" href="/mestre/CSS/painel-visual.css">
+  <link rel="stylesheet" href="/mestre/CSS/figurantes-cartoes.css">
+  <link rel="stylesheet" href="/mestre/CSS/rolagem.css">
+</head>
+<body class="rpg-app master-app rol-app">
+  <a class="rpg-skip" href="#mestre-conteudo">Pular para o conteúdo</a>
+  <header id="mestre-cabecalho" data-pagina="rolagem"></header>
+  <main id="mestre-conteudo" tabindex="-1" class="master-main rol-pagina">
+    <div class="rol-mesa">
+      <section id="rol-secao" class="rol-painel" aria-label="Rolagens do mestre">
+        <div class="rol-instantaneas-topo">
+          <h3>Rolagens Instantâneas</h3>
+          <label class="rol-quantidade">Quantidade de dados
+            <input id="rol-quantidade" data-rol-controle type="number" value="1" min="1" max="999" step="1" required inputmode="numeric">
+          </label>
+        </div>
+        <div class="rol-dados" aria-label="Dados instantâneos">
+          <button type="button" data-dado="20" data-rol-controle aria-label="Rolar d20"><svg class="rpg-icon" aria-hidden="true"><use href="/CSS/icones.svg#dice"></use></svg><span>1d20</span></button>
+          <button type="button" data-dado="12" data-rol-controle aria-label="Rolar d12"><svg class="rpg-icon" aria-hidden="true"><use href="/CSS/icones.svg#dice"></use></svg><span>1d12</span></button>
+          <button type="button" data-dado="10" data-rol-controle aria-label="Rolar d10"><svg class="rpg-icon" aria-hidden="true"><use href="/CSS/icones.svg#dice"></use></svg><span>1d10</span></button>
+          <button type="button" data-dado="8" data-rol-controle aria-label="Rolar d8"><svg class="rpg-icon" aria-hidden="true"><use href="/CSS/icones.svg#dice"></use></svg><span>1d8</span></button>
+          <button type="button" data-dado="6" data-rol-controle aria-label="Rolar d6"><svg class="rpg-icon" aria-hidden="true"><use href="/CSS/icones.svg#dice"></use></svg><span>1d6</span></button>
+          <button type="button" data-dado="4" data-rol-controle aria-label="Rolar d4"><svg class="rpg-icon" aria-hidden="true"><use href="/CSS/icones.svg#dice"></use></svg><span>1d4</span></button>
+        </div>
+        <form novalidate id="rol-form" class="rol-personalizada">
+          <label for="rol-expressao">Rolagem personalizada</label>
+          <div><input id="rol-expressao" data-validar-dados="expressao" data-rol-controle type="text" maxlength="300" placeholder="2d20+5+3d6+1" autocomplete="off" spellcheck="false" aria-describedby="rol-ajuda rol-erro"><button id="rol-rolar" data-rol-controle type="submit">Rolar</button></div>
+          <p id="rol-ajuda">Some ou subtraia dados e valores fixos. A quantidade acima só altera os dados instantâneos.</p>
+        </form>
+        <p id="rol-erro" class="rol-erro" role="alert" hidden></p>
+        <section id="rol-resultado" class="rol-resultado" aria-label="Rolagem e aplicação de dano">
+          <div class="rol-resultado-topo"><span>Última rolagem</span><span id="rol-formula">—</span></div>
+          <output id="rol-total" aria-label="Total da rolagem" aria-live="polite">—</output>
+          <p id="rol-espera">Selecione um dado ou escreva uma expressão.</p>
+          <div class="rol-resultado-acoes">
+            <ul id="atk-selecao-resumo" aria-label="Todos os alvos selecionados" class="rol-selecao-resumo"></ul>
+            <button id="atk-aplicar-ultimo" data-rol-controle type="button" hidden disabled title="Aplicar o último resultado aos alvos selecionados">
+              <svg class="rpg-icon" aria-hidden="true"><use href="/CSS/icones.svg#sword"></use></svg><span>Aplicar dano</span>
+            </button>
+          </div>
+          <section id="atk-resultado" class="rol-aplicacao" aria-label="Última aplicação de dano" aria-live="polite" hidden></section>
+          <button id="atk-desfazer" data-rol-controle type="button" class="rol-desfazer" hidden>Desfazer último dano</button>
+          <details id="rol-detalhes-painel" class="rol-detalhes-painel" hidden>
+            <summary>Detalhes da rolagem</summary>
+            <ul id="rol-detalhes" aria-label="Resultados individuais"></ul>
+          </details>
+        </section>
+        <details id="rol-historico-painel" class="rol-historico" hidden><summary>Histórico da sessão</summary><ol id="rol-historico"></ol></details>
+      </section>
+      <aside id="atk-secao" class="rol-painel rol-alvos-painel" aria-labelledby="atk-titulo" data-atacar="false">
+        <div class="rol-alvos-topo"><h3 id="atk-titulo">Alvos</h3><label class="rol-atacar"><input id="atk-atacar" type="checkbox" role="switch"><span class="rol-switch" aria-hidden="true"></span><span>Atacar</span></label></div>
+        <div class="rol-segmentado" role="tablist" aria-label="Categoria dos alvos">
+          <div><button id="atk-jogadores" type="button" role="tab" aria-selected="true" aria-controls="atk-alvos">Jogadores</button></div>
+          <div><button id="atk-inimigos" type="button" role="tab" aria-selected="false" aria-controls="atk-alvos" tabindex="-1">Inimigos</button></div>
+        </div>
+        <p id="atk-status" role="status" tabindex="-1">Nenhum alvo selecionado · ataque desativado</p>
+        <p id="atk-aviso" class="rol-alvos-aviso">Aguardando os alvos do servidor…</p>
+        <button id="atk-atualizar" type="button" hidden>Tentar carregar novamente</button>
+        <ul id="atk-alvos" class="fig-resumos rol-alvos" aria-label="Alvos disponíveis"></ul>
+      </aside>
+    </div>
+  </main>
+  <script src="/JS/interface.js"></script>
+  <script src="/mestre/JS/comum.js"></script>
+  <script src="/mestre/JS/cartao-resumo.js"></script>
+  <script src="/mestre/JS/rolagem.js"></script>
+</body>
+</html>

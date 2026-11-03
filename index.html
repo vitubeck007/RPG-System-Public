@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grimório & Ficha de RPG</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            void: '#0b1118',
+            dungeon: {
+              950: '#0f1721',
+              900: '#141d28',
+              800: '#1c2836',
+              700: '#354555',
+              600: '#4b6074',
+              500: '#718394',
+            },
+            amberGold: {
+              400: '#d1b77c',
+              500: '#c6aa6f',
+              600: '#c6aa6f',
+              700: '#8f7749',
+            },
+            crimson: {
+              400: '#e795a1',
+              500: '#d17d8a',
+              600: '#a15a67',
+              700: '#744551',
+            },
+            vigor: {
+              400: '#87c4df',
+              500: '#72abc7',
+              600: '#477b98',
+            },
+            sanity: {
+              400: '#bda1e0',
+              500: '#a589ca',
+              600: '#7a5c9e',
+            }
+          },
+          fontFamily: {
+            cinzel: ['Georgia', 'serif'],
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Socket.io Client -->
+  <script src="/socket.io/socket.io.js"></script>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <link rel="stylesheet" href="CSS/index.css">
+  <link rel="stylesheet" href="CSS/rpg-ui.css">
+  <link rel="stylesheet" href="CSS/ficha.css">
+</head>
+
+<body class="rpg-app sheet-app">
+  <a class="rpg-skip" href="#ficha-conteudo">Pular para a ficha</a>
+
+  <!-- Faixa de estado: conectando / carregando / sem conexão / sessão expirada (ver atualizarEstadoFicha) -->
+  <div id="estado-ficha" role="status" aria-live="polite"
+    class="fixed top-0 inset-x-0 z-[60] pointer-events-none text-center text-xs font-mono py-1.5 border-b bg-dungeon-900 text-slate-300 border-dungeon-700">
+    Conectando ao servidor…</div>
+
+  <!-- Container de Notificações Toast -->
+  <div id="toast-container" data-modal-background role="region" aria-label="Notificações"
+    class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+  <!-- Janela do Baú: aparece quando o mestre libera um baú (só nome e itens disponíveis) -->
+  <aside id="bau-janela" data-modal-background
+    class="hidden fixed bottom-4 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto bg-dungeon-900 border border-amberGold-600 rounded-xl shadow-2xl p-3 space-y-2 text-xs font-mono"
+    aria-live="polite"></aside>
+
+  <header class="rpg-topbar sheet-header" data-modal-background>
+    <div class="sheet-topbar">
+      <div class="sheet-identity">
+        <button type="button" class="sheet-avatar" onclick="trocarAba(1)"
+          aria-label="Ir para edição da imagem do personagem">
+          <img id="char-avatar-img" src="/CSS/retrato-padrao.svg" alt="Retrato do personagem">
+        </button>
+        <div class="sheet-name">
+          <span class="rpg-eyebrow">Grimório · Ficha de campanha</span>
+          <h1 id="sheet-character-name">Personagem</h1>
+        </div>
+        <div id="progression-control" class="sheet-level" title="Progressão definida pela configuração da mesa">
+          <span id="progression-type-btn">Lv</span>
+          <label class="rpg-sr-only" for="progression-val-input">Nível ou experiência do personagem</label>
+          <input type="text" id="progression-val-input" value="1" autocomplete="off">
+        </div>
+      </div>
+      <div class="sheet-session">
+        <span id="save-status" role="status" aria-live="polite" aria-atomic="true"></span>
+        <button id="save-retry" type="button" hidden class="rpg-btn rpg-btn--danger"
+          onclick="tentarSalvarNovamente()">Tentar salvar novamente</button>
+        <a class="rpg-btn rpg-btn--quiet" href="/selecao" title="Voltar à seleção de personagens"
+          aria-label="Voltar à seleção de personagens"><svg class="rpg-icon" aria-hidden="true">
+            <use href="/CSS/icones.svg#logout"></use>
+          </svg><span>Personagens</span></a>
+      </div>
+    </div>
+
+  </header>
+  <div class="sheet-navigation" data-modal-background>
+    <nav class="sheet-nav" role="tablist" aria-label="Áreas da ficha">
+      <button type="button" role="tab" id="tab-btn-1" class="tab-btn" aria-controls="aba-1" aria-selected="true"
+        tabindex="0" onclick="trocarAba(1)"><svg class="rpg-icon" aria-hidden="true">
+          <use href="/CSS/icones.svg#book"></use>
+        </svg><span>Ficha</span></button>
+      <button type="button" role="tab" id="tab-btn-2" class="tab-btn" aria-controls="aba-2" aria-selected="false"
+        tabindex="-1" onclick="trocarAba(2)"><svg class="rpg-icon" aria-hidden="true">
+          <use href="/CSS/icones.svg#shield"></use>
+        </svg><span>Perícias</span></button>
+      <button type="button" role="tab" id="tab-btn-3" class="tab-btn" aria-controls="aba-3" aria-selected="false"
+        tabindex="-1" onclick="trocarAba(3)"><svg class="rpg-icon" aria-hidden="true">
+          <use href="/CSS/icones.svg#bag"></use>
+        </svg><span>Mochila</span></button>
+      <button type="button" role="tab" id="tab-btn-4" class="tab-btn" aria-controls="aba-4" aria-selected="false"
+        tabindex="-1" onclick="trocarAba(4)"><svg class="rpg-icon" aria-hidden="true">
+          <use href="/CSS/icones.svg#spark"></use>
+        </svg><span>Grimório</span></button>
+      <button type="button" role="tab" id="tab-btn-5" class="tab-btn" aria-controls="aba-5" aria-selected="false"
+        tabindex="-1" onclick="trocarAba(5)"><svg class="rpg-icon" aria-hidden="true">
+          <use href="/CSS/icones.svg#dice"></use>
+        </svg><span>Dados</span><span id="combo-badge" class="hidden">0</span></button>
+    </nav>
+  </div>
+
+  <aside id="draft-recovery" class="sheet-recovery rpg-card" hidden aria-labelledby="draft-recovery-title">
+    <h2 id="draft-recovery-title">Alterações não confirmadas</h2>
+    <p id="draft-recovery-message"></p>
+    <div class="rpg-modal-actions">
+      <button type="button" class="rpg-btn rpg-btn--primary" onclick="restaurarRascunhoFicha()">Restaurar e salvar
+        rascunho</button>
+      <button type="button" class="rpg-btn" onclick="descartarRascunhoFicha()">Manter versão do servidor</button>
+    </div>
+  </aside>
+  <main id="ficha-conteudo" class="sheet-main" tabindex="-1" data-modal-background>
+    <div id="vital-cards-container" class="sheet-vitals grid-cols-3" aria-label="Recursos do personagem">
+      <div class="sheet-vital sheet-vital--hp" role="group" aria-label="Vida">
+        <div class="sheet-vital-label"><svg class="rpg-icon" aria-hidden="true">
+            <use href="/CSS/icones.svg#heart"></use>
+          </svg><span>Vida</span></div>
+        <div class="sheet-vital-value"><span id="hp-val">–</span><span class="sheet-vital-slash">/</span><button
+            type="button" id="hp-max" onclick="editarMaximoVital('hp')" title="Editar vida máxima"
+            aria-label="Editar máximo de Vida">–</button></div>
+        <div class="sheet-vital-meter">
+          <div id="hp-bar" style="width:0%"></div>
+        </div>
+        <div class="sheet-vital-actions"><button type="button" onclick="alterarVital('hp', -1, this)"
+            aria-label="Diminuir Vida em 1">−1</button><button type="button" onclick="alterarVital('hp', 1, this)"
+            aria-label="Aumentar Vida em 1">+1</button><button type="button" onclick="abrirAjusteVital('hp')"
+            aria-label="Ajustar Vida por um valor">Ajustar…</button></div>
+      </div>
+      <div id="vigor-card" class="sheet-vital sheet-vital--vigor" role="group" aria-label="Vigor">
+        <div class="sheet-vital-label"><svg class="rpg-icon" aria-hidden="true">
+            <use href="/CSS/icones.svg#spark"></use>
+          </svg><span>Vigor</span></div>
+        <div class="sheet-vital-value"><span id="vigor-val">–</span><span class="sheet-vital-slash">/</span><button
+            type="button" id="vigor-max" onclick="editarMaximoVital('vigor')" title="Editar vigor máximo"
+            aria-label="Editar máximo de Vigor">–</button></div>
+        <div class="sheet-vital-meter">
+          <div id="vigor-bar" style="width:0%"></div>
+        </div>
+        <div class="sheet-vital-actions"><button type="button" onclick="alterarVital('vigor', -1, this)"
+            aria-label="Diminuir Vigor em 1">−1</button><button type="button" onclick="alterarVital('vigor', 1, this)"
+            aria-label="Aumentar Vigor em 1">+1</button><button type="button" onclick="abrirAjusteVital('vigor')"
+            aria-label="Ajustar Vigor por um valor">Ajustar…</button></div>
+      </div>
+      <div class="sheet-vital sheet-vital--sanity" role="group" aria-label="Sanidade">
+        <div class="sheet-vital-label"><svg class="rpg-icon" aria-hidden="true">
+            <use href="/CSS/icones.svg#shield"></use>
+          </svg><span>Sanidade</span></div>
+        <div class="sheet-vital-value"><span id="sanity-val">–</span><span class="sheet-vital-slash">/</span><button
+            type="button" id="sanity-max" onclick="editarMaximoVital('sanity')" title="Editar sanidade máxima"
+            aria-label="Editar máximo de Sanidade">–</button></div>
+        <div class="sheet-vital-meter">
+          <div id="sanity-bar" style="width:0%"></div>
+        </div>
+        <div class="sheet-vital-actions"><button type="button" onclick="alterarVital('sanity', -1, this)"
+            aria-label="Diminuir Sanidade em 1">−1</button><button type="button"
+            onclick="alterarVital('sanity', 1, this)" aria-label="Aumentar Sanidade em 1">+1</button><button
+            type="button" onclick="abrirAjusteVital('sanity')"
+            aria-label="Ajustar Sanidade por um valor">Ajustar…</button></div>
+      </div>
+    </div>
+
+    <!-- ==================== ABA 1: BIOGRAFIA & ANOTAÇÕES ==================== -->
+    <section id="aba-1" class="tab-content block" role="tabpanel" aria-labelledby="tab-btn-1" tabindex="0">
+      <div class="sheet-biography">
+
+        <div class="bg-dungeon-900 panel-frame p-5 rounded-xl sheet-profile">
+          <div class="sheet-retrato-editor sheet-portrait-editor">
+            <div class="sheet-retrato-bloco">
+              <details class="sheet-retrato-menu">
+                <summary aria-label="Opções da imagem" title="Opções da imagem">+</summary>
+                <div class="sheet-retrato-menu-acoes" role="group" aria-label="Ações da imagem"></div>
+              </details>
+              <button type="button" id="avatar-ver-foto" class="sheet-retrato-previa" aria-label="Ver foto completa" title="Ver foto completa">
+                <img id="char-bio-portrait" src="/CSS/retrato-padrao.svg" alt="Imagem do personagem">
+              </button>
+              <div class="sheet-retrato-interruptor" role="group" aria-label="Modo da imagem">
+                <button type="button" data-avatar-modo="foto" aria-pressed="true" onclick="definirModoImagemPlayer('foto')">Foto</button>
+                <button type="button" data-avatar-modo="retrato" aria-pressed="false" onclick="definirModoImagemPlayer('retrato')">Retrato</button>
+              </div>
+            </div>
+            <div id="avatar-foto-campo"><input type="hidden" id="avatar-url-input"></div>
+            <div id="avatar-retrato-campo" hidden><input type="hidden" id="avatar-retrato-input"></div>
+          </div>
+
+          <div class="sheet-profile-fields">
+            <label class="rpg-field">Nome do personagem
+              <input type="text" id="char-name-input" data-campo="perfil.nome" maxlength="40"
+                placeholder="Nome do personagem" autocomplete="off" class="rpg-input">
+            </label>
+            <label class="rpg-field">Classe / ofício
+              <input type="text" id="char-class-input" data-campo="perfil.classe" maxlength="120"
+                placeholder="Classe ou ofício" autocomplete="off" class="rpg-input">
+            </label>
+            <div class="flex justify-between gap-2 border-b border-dungeon-800 pb-1">
+              <span class="text-slate-500 font-cinzel shrink-0">Origem:</span>
+              <input type="text" data-campo="perfil.origem" aria-label="Origem" maxlength="80" placeholder="Sua origem"
+                autocomplete="off"
+                class="min-w-0 flex-1 bg-transparent text-right text-amber-200 placeholder-slate-600 border-b border-transparent hover:border-slate-600 focus:border-amberGold-500 focus:outline-none transition">
+            </div>
+            <div class="flex justify-between gap-2 border-b border-dungeon-800 pb-1">
+              <span class="text-slate-500 font-cinzel shrink-0">Idade:</span>
+              <input type="text" data-campo="perfil.idade" aria-label="Idade" maxlength="40" placeholder="Idade"
+                autocomplete="off"
+                class="min-w-0 flex-1 bg-transparent text-right text-slate-200 placeholder-slate-600 border-b border-transparent hover:border-slate-600 focus:border-amberGold-500 focus:outline-none transition">
+            </div>
+            <div class="flex justify-between gap-2 border-b border-dungeon-800 pb-1">
+              <span class="text-slate-500 font-cinzel shrink-0">Alinhamento:</span>
+              <input type="text" data-campo="perfil.alinhamento" aria-label="Alinhamento" maxlength="60"
+                placeholder="Alinhamento" autocomplete="off"
+                class="min-w-0 flex-1 bg-transparent text-right text-amber-400 placeholder-slate-600 border-b border-transparent hover:border-slate-600 focus:border-amberGold-500 focus:outline-none transition">
+            </div>
+            <div class="flex justify-between gap-2 border-b border-dungeon-800 pb-1">
+              <span class="text-slate-500 font-cinzel shrink-0">Divindade/Pacto:</span>
+              <input type="text" data-campo="perfil.divindade" aria-label="Divindade ou pacto" maxlength="80"
+                placeholder="Divindade ou pacto" autocomplete="off"
+                class="min-w-0 flex-1 bg-transparent text-right text-purple-400 placeholder-slate-600 border-b border-transparent hover:border-slate-600 focus:border-amberGold-500 focus:outline-none transition">
+            </div>
+          </div>
+        </div>
+
+        <div class="sheet-story space-y-5">
+          <div class="bg-dungeon-900 panel-frame p-5 rounded-xl">
+            <h3 class="font-cinzel text-base font-bold text-amberGold-400 flex items-center gap-2 mb-2">
+              <i class="fa-solid fa-feather-pointed"></i> Origens & Juramentos
+            </h3>
+            <p class="text-xs text-slate-400 mb-2">Passado, linhagem e objetivos fundamentais.</p>
+            <textarea id="bio-history-text" aria-label="Origens e juramentos" data-campo="biografia.history" rows="4"
+              maxlength="20000" placeholder="Passado, linhagem e objetivos do personagem..."
+              class="w-full bg-dungeon-800/80 border border-dungeon-700 focus:border-amberGold-500 rounded-lg p-3 text-sm text-slate-200 focus:outline-none transition leading-relaxed"></textarea>
+          </div>
+
+          <div class="bg-dungeon-900 panel-frame p-5 rounded-xl">
+            <h3 class="font-cinzel text-base font-bold text-crimson-500 flex items-center gap-2 mb-2">
+              <i class="fa-solid fa-skull-crossbones"></i> Traumas, Dores & Cicatrizes
+            </h3>
+            <p class="text-xs text-slate-400 mb-2">Fobias, feridas de guerra e perturbações mentais ativas.</p>
+            <textarea id="bio-scars-text" aria-label="Traumas, dores e cicatrizes" data-campo="biografia.scars" rows="3"
+              maxlength="20000" placeholder="Fobias, feridas de guerra, perturbações mentais..."
+              class="w-full bg-dungeon-800/80 border border-dungeon-700 focus:border-crimson-600 rounded-lg p-3 text-sm text-slate-200 focus:outline-none transition leading-relaxed"></textarea>
+          </div>
+
+          <div class="bg-dungeon-900 panel-frame p-5 rounded-xl">
+            <h3 class="font-cinzel text-base font-bold text-amber-200 flex items-center gap-2 mb-2">
+              <i class="fa-solid fa-book-journal-whills"></i> Anotações da Campanha
+            </h3>
+            <textarea id="bio-notes-text" aria-label="Anotações da campanha" data-campo="biografia.notes" rows="3"
+              maxlength="20000" placeholder="Contatos, dívidas, pistas, senhas..."
+              class="w-full bg-dungeon-800/80 border border-dungeon-700 focus:border-amberGold-500 rounded-lg p-3 text-sm text-slate-200 focus:outline-none transition leading-relaxed"></textarea>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==================== ABA 2: PERÍCIAS EDITÁVEIS ==================== -->
+    <section id="aba-2" class="tab-content hidden" role="tabpanel" aria-labelledby="tab-btn-2" tabindex="0">
+      <!-- Caixa Única Contendo Atributos e Perícias -->
+      <div class="bg-dungeon-900 panel-frame p-5 sm:p-6 rounded-xl shadow-2xl border border-dungeon-700/80">
+
+        <!-- ==================== BLOCO 1: ATRIBUTOS ==================== -->
+        <details id="sheet-attributes-details" class="sheet-attributes-panel" open>
+          <summary><span class="sheet-attributes-title">Atributos</span><span class="rpg-hint">Valores-base · expandir /
+              recolher</span></summary>
+
+
+          <!-- Grid dos 6 Atributos Básicos -->
+          <div class="sheet-attributes">
+
+            <!-- FORÇA -->
+            <div
+              class="bg-dungeon-950/90 border border-dungeon-800 rounded-xl p-2.5 flex flex-col items-center justify-between shadow-md">
+              <div class="flex items-center gap-1.5 text-amberGold-400/90 mb-1">
+                <i class="fa-solid fa-hand-fist text-xs text-amberGold-500"></i>
+                <span class="font-cinzel font-black text-xs tracking-wider text-amber-200">FOR</span>
+                <span class="text-[9px] font-mono text-slate-500 uppercase tracking-tighter">Força</span>
+              </div>
+
+              <div class="relative w-full flex items-center justify-center my-0.5">
+                <input type="number" min="0" max="999" data-campo="atributos.FOR" value="0" title="Valor de Força"
+                  aria-label="Valor de Força"
+                  class="w-full bg-dungeon-900/90 border border-dungeon-800 focus:border-amberGold-500 rounded-lg py-1 text-center font-mono font-black text-xl text-slate-100 focus:text-amberGold-300 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+              </div>
+
+              <div class="w-full mt-1.5 pt-1.5 border-t border-dungeon-800/80 flex justify-center">
+                <button type="button" onclick="rolarAtributo('FOR', 'Força')" title="Rolar Teste de Força (1d20 + FOR)"
+                  class="px-2.5 py-0.5 bg-dungeon-900 border border-dungeon-700/80 rounded text-[10px] font-mono font-semibold text-slate-300 active:scale-95 flex items-center gap-1 shadow-sm cursor-pointer">
+                  <i class="fa-solid fa-dice-d20 text-[10px] text-amberGold-500"></i>
+                  <span>d20</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- DESTREZA -->
+            <div
+              class="bg-dungeon-950/90 border border-dungeon-800 rounded-xl p-2.5 flex flex-col items-center justify-between shadow-md">
+              <div class="flex items-center gap-1.5 text-amberGold-400/90 mb-1">
+                <i class="fa-solid fa-person-running text-xs text-amberGold-500"></i>
+                <span class="font-cinzel font-black text-xs tracking-wider text-amber-200">DES</span>
+                <span class="text-[9px] font-mono text-slate-500 uppercase tracking-tighter">Destreza</span>
+              </div>
+
+              <div class="relative w-full flex items-center justify-center my-0.5">
+                <input type="number" min="0" max="999" data-campo="atributos.DES" value="0" title="Valor de Destreza"
+                  aria-label="Valor de Destreza"
+                  class="w-full bg-dungeon-900/90 border border-dungeon-800 focus:border-amberGold-500 rounded-lg py-1 text-center font-mono font-black text-xl text-slate-100 focus:text-amberGold-300 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+              </div>
+
+              <div class="w-full mt-1.5 pt-1.5 border-t border-dungeon-800/80 flex justify-center">
+                <button type="button" onclick="rolarAtributo('DES', 'Destreza')"
+                  title="Rolar Teste de Destreza (1d20 + DES)"
+                  class="px-2.5 py-0.5 bg-dungeon-900 border border-dungeon-700/80 rounded text-[10px] font-mono font-semibold text-slate-300 active:scale-95 flex items-center gap-1 shadow-sm cursor-pointer">
+                  <i class="fa-solid fa-dice-d20 text-[10px] text-amberGold-500"></i>
+                  <span>d20</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- INTELIGÊNCIA -->
+            <div
+              class="bg-dungeon-950/90 border border-dungeon-800 rounded-xl p-2.5 flex flex-col items-center justify-between shadow-md">
+              <div class="flex items-center gap-1.5 text-amberGold-400/90 mb-1">
+                <i class="fa-solid fa-brain text-xs text-amberGold-500"></i>
+                <span class="font-cinzel font-black text-xs tracking-wider text-amber-200">INT</span>
+                <span class="text-[9px] font-mono text-slate-500 uppercase tracking-tighter">Intel.</span>
+              </div>
+
+              <div class="relative w-full flex items-center justify-center my-0.5">
+                <input type="number" min="0" max="999" data-campo="atributos.INT" value="0"
+                  title="Valor de Inteligência" aria-label="Valor de Inteligência"
+                  class="w-full bg-dungeon-900/90 border border-dungeon-800 focus:border-amberGold-500 rounded-lg py-1 text-center font-mono font-black text-xl text-slate-100 focus:text-amberGold-300 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+              </div>
+
+              <div class="w-full mt-1.5 pt-1.5 border-t border-dungeon-800/80 flex justify-center">
+                <button type="button" onclick="rolarAtributo('INT', 'Inteligência')"
+                  title="Rolar Teste de Inteligência (1d20 + INT)"
+                  class="px-2.5 py-0.5 bg-dungeon-900 border border-dungeon-700/80 rounded text-[10px] font-mono font-semibold text-slate-300 active:scale-95 flex items-center gap-1 shadow-sm cursor-pointer">
+                  <i class="fa-solid fa-dice-d20 text-[10px] text-amberGold-500"></i>
+                  <span>d20</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- SABEDORIA -->
+            <div
+              class="bg-dungeon-950/90 border border-dungeon-800 rounded-xl p-2.5 flex flex-col items-center justify-between shadow-md">
+              <div class="flex items-center gap-1.5 text-amberGold-400/90 mb-1">
+                <i class="fa-solid fa-eye text-xs text-amberGold-500"></i>
+                <span class="font-cinzel font-black text-xs tracking-wider text-amber-200">SAB</span>
+                <span class="text-[9px] font-mono text-slate-500 uppercase tracking-tighter">Sabedoria</span>
+              </div>
+
+              <div class="relative w-full flex items-center justify-center my-0.5">
+                <input type="number" min="0" max="999" data-campo="atributos.SAB" value="0" title="Valor de Sabedoria"
+                  aria-label="Valor de Sabedoria"
+                  class="w-full bg-dungeon-900/90 border border-dungeon-800 focus:border-amberGold-500 rounded-lg py-1 text-center font-mono font-black text-xl text-slate-100 focus:text-amberGold-300 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+              </div>
+
+              <div class="w-full mt-1.5 pt-1.5 border-t border-dungeon-800/80 flex justify-center">
+                <button type="button" onclick="rolarAtributo('SAB', 'Sabedoria')"
+                  title="Rolar Teste de Sabedoria (1d20 + SAB)"
+                  class="px-2.5 py-0.5 bg-dungeon-900 border border-dungeon-700/80 rounded text-[10px] font-mono font-semibold text-slate-300 active:scale-95 flex items-center gap-1 shadow-sm cursor-pointer">
+                  <i class="fa-solid fa-dice-d20 text-[10px] text-amberGold-500"></i>
+                  <span>d20</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- PRESENÇA -->
+            <div
+              class="bg-dungeon-950/90 border border-dungeon-800 rounded-xl p-2.5 flex flex-col items-center justify-between shadow-md">
+              <div class="flex items-center gap-1.5 text-amberGold-400/90 mb-1">
+                <i class="fa-solid fa-crown text-xs text-amberGold-500"></i>
+                <span class="font-cinzel font-black text-xs tracking-wider text-amber-200">PRE</span>
+                <span class="text-[9px] font-mono text-slate-500 uppercase tracking-tighter">Presença</span>
+              </div>
+
+              <div class="relative w-full flex items-center justify-center my-0.5">
+                <input type="number" min="0" max="999" data-campo="atributos.PRE" value="0" title="Valor de Presença"
+                  aria-label="Valor de Presença"
+                  class="w-full bg-dungeon-900/90 border border-dungeon-800 focus:border-amberGold-500 rounded-lg py-1 text-center font-mono font-black text-xl text-slate-100 focus:text-amberGold-300 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+              </div>
+
+              <!-- Hitbox Reduzida: Botão Isolado -->
+              <div class="w-full mt-1.5 pt-1.5 border-t border-dungeon-800/80 flex justify-center">
+                <button type="button" onclick="rolarAtributo('PRE', 'Presença')"
+                  title="Rolar Teste de Presença (1d20 + PRE)"
+                  class="px-2.5 py-0.5 bg-dungeon-900 border border-dungeon-700/80 rounded text-[10px] font-mono font-semibold text-slate-300 active:scale-95 flex items-center gap-1 shadow-sm cursor-pointer">
+                  <i class="fa-solid fa-dice-d20 text-[10px] text-amberGold-500"></i>
+                  <span>d20</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- VONTADE -->
+            <div
+              class="bg-dungeon-950/90 border border-dungeon-800 rounded-xl p-2.5 flex flex-col items-center justify-between shadow-md">
+              <div class="flex items-center gap-1.5 text-amberGold-400/90 mb-1">
+                <i class="fa-solid fa-shield-heart text-xs text-amberGold-500"></i>
+                <span class="font-cinzel font-black text-xs tracking-wider text-amber-200">VON</span>
+                <span class="text-[9px] font-mono text-slate-500 uppercase tracking-tighter">Vontade</span>
+              </div>
+
+              <div class="relative w-full flex items-center justify-center my-0.5">
+                <input type="number" min="0" max="999" data-campo="atributos.VON" value="0" title="Valor de Vontade"
+                  aria-label="Valor de Vontade"
+                  class="w-full bg-dungeon-900/90 border border-dungeon-800 focus:border-amberGold-500 rounded-lg py-1 text-center font-mono font-black text-xl text-slate-100 focus:text-amberGold-300 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+              </div>
+
+
+              <div class="w-full mt-1.5 pt-1.5 border-t border-dungeon-800/80 flex justify-center gap-2">
+
+                <!-- Rolar -->
+                <button type="button" onclick="rolarAtributo('VON', 'Vontade')"
+                  title="Rolar Teste de Vontade (1d20 + VON)"
+                  class="px-2.5 py-0.5 bg-dungeon-900 border border-dungeon-700/80 rounded text-[10px] font-mono font-semibold text-slate-300 active:scale-95 flex items-center gap-1 shadow-sm cursor-pointer hover:border-amberGold-600/60 transition">
+                  <i class="fa-solid fa-dice-d20 text-[10px] text-amberGold-500"></i>
+                  <span>d20</span>
+                </button>
+
+                <!-- Adicionar ao Combo -->
+                <button type="button" onclick="adicionarAtributo('VON')" title="Adicionar Teste ao Combo" class="w-6 h-6 rounded border border-amberGold-700/50 bg-amberGold-900/20 text-amberGold-500
+                  hover:bg-amberGold-500 hover:text-black hover:border-amberGold-400
+                  active:scale-90 transition-all duration-150 shadow-sm flex items-center justify-center">
+                  <i class="fa-solid fa-plus text-[10px]"></i>
+                </button>
+
+              </div>
+            </div>
+
+          </div>
+
+        </details>
+
+        <!-- ==================== BLOCO 2: PERÍCIAS ==================== -->
+        <div>
+          <div
+            class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5 pb-3 border-b border-dungeon-800/70">
+            <div>
+              <h2 class="font-cinzel text-xl font-bold text-amberGold-400 flex items-center gap-2">
+                <i class="fa-solid fa-scale-balanced text-amberGold-500"></i> Perícias
+              </h2>
+            </div>
+            <div class="sheet-skill-tools">
+              <label class="sheet-skill-search"><span class="rpg-sr-only">Buscar perícia</span><input type="search"
+                  id="skills-search" class="rpg-input" placeholder="Buscar perícia…" autocomplete="off"
+                  aria-controls="skills-container"></label>
+              <button id="skills-edit-bonus" class="rpg-btn" type="button" aria-pressed="false"
+                aria-controls="skills-container" onclick="alternarEdicaoBonusPericias()">Editar bônus</button>
+            </div>
+          </div>
+
+          <!-- Container Dinâmico das Perícias (Injetado via JS) -->
+          <div id="skills-container" class="sheet-skills"></div>
+          <p id="skills-empty" class="rpg-muted" hidden>Nenhuma perícia encontrada.</p>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==================== ABA 3: EQUIPAMENTO & INVENTÁRIO TETRIS ==================== -->
+    <section id="aba-3" class="tab-content hidden" role="tabpanel" aria-labelledby="tab-btn-3" tabindex="0">
+      <div class="space-y-6">
+
+        <!-- Sanfona de Riquezas -->
+        <div id="riches-section"
+          class="bg-dungeon-900 border border-dungeon-700/80 rounded-xl overflow-hidden shadow-lg">
+          <button type="button" onclick="toggleRiquezas()" aria-expanded="false" aria-controls="riches-body"
+            class="w-full px-5 py-3.5 flex justify-between items-center text-left bg-dungeon-800/80 hover:bg-dungeon-800 transition font-cinzel font-bold text-amberGold-400 text-sm">
+            <span class="flex items-center gap-2.5">
+              <i class="fa-solid fa-coins text-amberGold-500"></i> Riquezas & Recursos da Bolsa
+            </span>
+            <span class="flex items-center gap-2 text-xs text-slate-400 font-sans">
+              <span id="riches-summary" class="font-mono text-amber-200">0 PO • 0 PP • 0 PC</span>
+              <i id="riches-icon"
+                class="fa-solid fa-chevron-down transition-transform duration-200 text-amberGold-400"></i>
+            </span>
+          </button>
+
+          <div id="riches-body" class="hidden p-4 border-t border-dungeon-800 bg-dungeon-950/60">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center font-mono">
+              <div class="p-3 bg-dungeon-900 rounded-lg border border-amberGold-600/40">
+                <div class="text-[11px] text-amberGold-500 font-cinzel font-bold">Ouro (PO)</div>
+                <input type="number" id="coin-gold" aria-label="Ouro" value="0" min="0" onchange="aoAlterarMoedas()"
+                  class="w-full text-center bg-transparent text-lg font-bold text-amber-200 focus:outline-none border-b border-transparent focus:border-amberGold-500">
+              </div>
+              <div class="p-3 bg-dungeon-900 rounded-lg border border-slate-600/60">
+                <div class="text-[11px] text-slate-400 font-cinzel font-bold">Prata (PP)</div>
+                <input type="number" id="coin-silver" aria-label="Prata" value="0" min="0" onchange="aoAlterarMoedas()"
+                  class="w-full text-center bg-transparent text-lg font-bold text-slate-200 focus:outline-none border-b border-transparent focus:border-slate-400">
+              </div>
+              <div class="p-3 bg-dungeon-900 rounded-lg border border-amber-900/60">
+                <div class="text-[11px] text-amber-700 font-cinzel font-bold">Cobre (PC)</div>
+                <input type="number" id="coin-copper" aria-label="Cobre" value="0" min="0" onchange="aoAlterarMoedas()"
+                  class="w-full text-center bg-transparent text-lg font-bold text-amber-600 focus:outline-none border-b border-transparent focus:border-amber-700">
+              </div>
+              <div class="p-3 bg-dungeon-900 rounded-lg border border-crimson-800/60">
+                <div class="text-[11px] text-crimson-400 font-cinzel font-bold">Moeda de Sangue</div>
+                <input type="number" id="coin-blood" aria-label="Moedas de sangue" value="0" min="0"
+                  onchange="aoAlterarMoedas()"
+                  class="w-full text-center bg-transparent text-lg font-bold text-crimson-400 focus:outline-none border-b border-transparent focus:border-crimson-500">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="backpack-inventory-section"
+          class="bg-dungeon-900 panel-frame p-5 rounded-xl flex flex-col items-center">
+          <div class="w-full flex justify-between items-center mb-4 pb-3 border-b border-dungeon-800">
+            <div>
+              <h2 class="font-cinzel text-lg font-bold text-amberGold-400 flex items-center gap-2">
+                <i class="fa-solid fa-cubes"></i> Mochila
+              </h2>
+              <p class="text-xs text-slate-400">Use a grade ou a lista para ver detalhes, equipar ou usar no combo.</p>
+            </div>
+            <div class="text-right font-mono text-xs">
+              <span id="grid-dimensions-label" class="text-amberGold-400 font-bold">Bolsos Básicos (3x3)</span>
+            </div>
+          </div>
+
+          <div class="sheet-backpack-search">
+            <label for="backpack-search">Buscar na mochila</label>
+            <input id="backpack-search" type="search" class="rpg-input" placeholder="Nome ou tipo do item…"
+              autocomplete="off" aria-controls="backpack-grid backpack-item-list" oninput="filtrarItensMochila()">
+            <p id="backpack-search-result" class="rpg-hint" role="status" aria-live="polite"></p>
+          </div>
+          <div class="sheet-backpack-content">
+            <!-- A busca realça a grade sem alterar posições, dimensões ou capacidade. -->
+            <div class="sheet-grid-scroll" tabindex="0" role="region"
+              aria-label="Grade espacial da mochila; role lateralmente se necessário">
+              <div class="inventory-grid shadow-2xl">
+                <div id="backpack-grid" class="relative">
+                  <!-- Células geradas via Javascript com dimensões justas -->
+                </div>
+
+                <!-- POPUP / BALÃO FLUTUANTE DO ITEM CLICADO -->
+
+              </div>
+            </div>
+            <section class="sheet-backpack-list" aria-labelledby="backpack-list-title">
+              <h3 id="backpack-list-title">Itens na mochila</h3>
+              <ul id="backpack-item-list"></ul>
+              <p id="backpack-list-empty" class="rpg-hint" hidden>Nenhum item na mochila.</p>
+            </section>
+          </div>
+
+          <div
+            class="w-full mt-4 pt-3 border-t border-dungeon-800 flex justify-between items-center text-xs text-slate-400 font-mono">
+            <span id="grid-blocks-count">Grade ativa: 9 blocos</span>
+            <span id="backpack-weight-label">Carga total: <strong class="text-amber-200">6.0 kg</strong></span>
+          </div>
+        </div>
+
+        <!-- ALTERAÇÃO 2: 4 SLOTS DE PRONTIDÃO (Mão Principal, Mão Secundária, Costas e Mochila Equipada) -->
+        <div class="bg-dungeon-900 panel-frame p-5 rounded-xl sheet-equipment">
+          <div class="flex justify-between items-center mb-4 pb-3 border-b border-dungeon-800">
+            <div>
+              <h2 class="font-cinzel text-lg font-bold text-amberGold-400 flex items-center gap-2">
+                <i class="fa-solid fa-person-military-pointing text-amberGold-500"></i> Equipamento
+              </h2>
+              <p class="text-xs text-slate-400">Armas de combate rápido, itens nas costas e o tipo de bolsa/mochila
+                equipada no corpo.</p>
+            </div>
+            <span class="text-xs font-mono text-slate-500"><i class="fa-solid fa-bolt mr-1 text-vigor-400"></i> Prontos
+              para ação</span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5" id="equipped-slots-container">
+
+            <!-- Slot: Mão Principal -->
+            <div id="slot-mainHand"
+              class="bg-dungeon-950 p-3 rounded-xl border border-dungeon-700 relative flex flex-col justify-between min-h-[145px] transition-all">
+              <div class="flex justify-between items-center text-xs mb-2">
+                <span class="font-cinzel font-bold text-amber-300 flex items-center gap-1">
+                  <i class="fa-solid fa-hand"></i> Mão Principal
+                </span>
+                <span id="badge-mainHand"
+                  class="text-[10px] font-mono px-2 py-0.5 rounded bg-dungeon-800 text-slate-400 border border-dungeon-700">Vazio</span>
+              </div>
+              <div id="content-mainHand" class="flex-1 flex flex-col justify-center items-center text-center py-2">
+                <i class="fa-solid fa-hand-back-fist text-2xl text-slate-700 mb-1"></i>
+                <span class="text-xs text-slate-500 italic">Mão desarmada</span>
+              </div>
+              <div id="actions-mainHand" class="hidden mt-2 pt-2 border-t border-dungeon-800 flex gap-2"></div>
+            </div>
+
+            <!-- Slot: Mão Secundária -->
+            <div id="slot-offHand"
+              class="bg-dungeon-950 p-3 rounded-xl border border-dungeon-700 relative flex flex-col justify-between min-h-[145px] transition-all">
+              <div class="flex justify-between items-center text-xs mb-2">
+                <span class="font-cinzel font-bold text-amber-300 flex items-center gap-1">
+                  <i class="fa-solid fa-hand fa-flip-horizontal"></i> Mão Secundária
+                </span>
+                <span id="badge-offHand"
+                  class="text-[10px] font-mono px-2 py-0.5 rounded bg-dungeon-800 text-slate-400 border border-dungeon-700">Vazio</span>
+              </div>
+              <div id="content-offHand" class="flex-1 flex flex-col justify-center items-center text-center py-2">
+                <i class="fa-solid fa-shield-halved text-2xl text-slate-700 mb-1"></i>
+                <span class="text-xs text-slate-500 italic">Mão livre</span>
+              </div>
+              <div id="actions-offHand" class="hidden mt-2 pt-2 border-t border-dungeon-800 flex gap-2"></div>
+            </div>
+
+            <!-- Slot: Costas -->
+            <div id="slot-back"
+              class="bg-dungeon-950 p-3 rounded-xl border border-dungeon-700 relative flex flex-col justify-between min-h-[145px] transition-all">
+              <div class="flex justify-between items-center text-xs mb-2">
+                <span class="font-cinzel font-bold text-amber-300 flex items-center gap-1">
+                  <i class="fa-solid fa-vest-patches"></i> Costas
+                </span>
+                <span id="badge-back"
+                  class="text-[10px] font-mono px-2 py-0.5 rounded bg-dungeon-800 text-slate-400 border border-dungeon-700">Vazio</span>
+              </div>
+              <div id="content-back" class="flex-1 flex flex-col justify-center items-center text-center py-2">
+                <i class="fa-solid fa-box text-2xl text-slate-700 mb-1"></i>
+                <span class="text-xs text-slate-500 italic">Nenhum item preso</span>
+              </div>
+              <div id="actions-back" class="hidden mt-2 pt-2 border-t border-dungeon-800 flex gap-2"></div>
+            </div>
+
+            <!-- ALTERAÇÃO 2: Slot da Mochila Equipada (Substitui o Select) -->
+            <div id="slot-backpack"
+              class="bg-dungeon-950 p-3 rounded-xl border border-amberGold-600/50 relative flex flex-col justify-between min-h-[145px] transition-all shadow-inner">
+              <div class="flex justify-between items-center text-xs mb-2">
+                <span class="font-cinzel font-bold text-amber-400 flex items-center gap-1">
+                  <i class="fa-solid fa-backpack"></i> Bolsa / Mochila
+                </span>
+                <span id="badge-backpack"
+                  class="text-[10px] font-mono px-2 py-0.5 rounded bg-amberGold-950 text-amberGold-400 border border-amberGold-700 font-bold">Básica</span>
+              </div>
+              <div id="content-backpack" class="flex-1 flex flex-col justify-center items-center text-center py-2">
+                <!-- Preenchido via Javascript -->
+              </div>
+              <div id="actions-backpack" class="mt-2 pt-2 border-t border-dungeon-800 flex gap-1">
+                <!-- Ações do Slot Mochila -->
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ALTERAÇÃO 3: ÁREA DA MOCHILA OTIMIZADA E COMPACTADA AOS SLOTS -->
+
+
+      </div>
+    </section>
+
+    <!-- ==================== ABA 4: HABILIDADES (GRIMÓRIO) ==================== -->
+    <!-- Os cards são desenhados por renderizarCodice() a partir de STATE.abilities / STATE.spells. -->
+    <section id="aba-4" class="tab-content hidden" role="tabpanel" aria-labelledby="tab-btn-4" tabindex="0">
+      <div class="bg-dungeon-900 panel-frame p-6 rounded-xl rpg-grimorio-panel">
+        <div
+          class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 pb-4 border-b border-dungeon-800">
+          <div>
+            <h2 class="font-cinzel text-xl font-bold text-amberGold-400 flex items-center gap-2"
+              style="background: radial-gradient(ellipse,#061525 60%, transparent 90%); padding: 6px 18px; border-radius: 15px;">
+              <i class="fa-solid fa-book-skull"></i> Magias & Habilidades
+            </h2>
+          </div>
+        </div>
+
+        <div class="rpg-tabs sheet-power-filters" role="group" aria-label="Filtrar poderes">
+          <button type="button" id="codice-sub-todos" class="rpg-tab" aria-pressed="true"
+            onclick="trocarSubAbaCodice('todos')">Todos</button>
+          <button type="button" id="codice-sub-habilidades" class="rpg-tab" aria-pressed="false"
+            onclick="trocarSubAbaCodice('habilidades')">Habilidades</button>
+          <button type="button" id="codice-sub-magias" class="rpg-tab" aria-pressed="false"
+            onclick="trocarSubAbaCodice('magias')">Magias</button>
+        </div>
+        <div id="codice-secao-habilidades" class="sheet-power-section">
+          <h3 style="text-shadow: 1px 2px 4px #061525;">Habilidades</h3>
+          <div id="abilities-container" class="sheet-powers"></div>
+        </div>
+        <div id="codice-secao-magias" class="sheet-power-section">
+          <h3 style="text-shadow: 1px 2px 0px #061525;">Magias</h3>
+          <div id="spells-container" class="sheet-powers"></div>
+        </div>
+        <span class="rpg-grimorio-arte" aria-hidden="true"><span class="rpg-grimorio-topo"></span><span
+            class="rpg-grimorio-emblema"></span><span class="rpg-grimorio-rodape"></span></span>
+      </div>
+    </section>
+
+    <!-- ==================== ABA 5: ROLADOR DE DADOS & COMBOS ==================== -->
+    <section id="aba-5" class="tab-content hidden" role="tabpanel" aria-labelledby="tab-btn-5" tabindex="0">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <div class="lg:col-span-2 space-y-6">
+          <div class="bg-dungeon-900 panel-frame p-5 rounded-xl">
+            <div class="flex justify-between items-center mb-3 pb-3 border-b border-dungeon-800">
+              <div>
+                <h2 class="font-cinzel text-lg font-bold text-amberGold-400 flex items-center gap-2">
+                  <i class="fa-solid fa-burst text-crimson-500"></i> Combo
+                </h2>
+                <p class="text-xs text-slate-400">Dados do equipamento, bônus de perícias e magias empilhados para
+                  este
+                  golpe.</p>
+              </div>
+              <button onclick="limparCombo()"
+                class="text-xs font-cinzel text-crimson-400 hover:text-crimson-300 px-2.5 py-1 rounded bg-dungeon-800 hover:bg-dungeon-700 border border-crimson-800/50 transition">
+                <i class="fa-solid fa-trash-can mr-1"></i> Limpar Fila
+              </button>
+            </div>
+
+            <div id="combo-chips-container"
+              class="min-h-[64px] p-3 bg-dungeon-950/70 border border-dungeon-800 rounded-lg flex flex-wrap items-center gap-2">
+              <span class="text-xs text-slate-500 italic">
+                Nenhum componente no combo. Adicione armas do inventário, bônus de perícias ou habilidades do
+                grimório.
+              </span>
+            </div>
+
+            <div
+              class="mt-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 p-3 bg-dungeon-800/60 rounded-lg border border-dungeon-700/60 font-mono text-xs">
+              <span class="text-slate-400">Fórmula do combo:</span>
+              <span id="combo-formula-display" class="text-amberGold-400 font-bold text-sm">0d0</span>
+            </div>
+
+            <button id="btn-roll-combo" onclick="rolarCombo()"
+              class="w-full mt-4 py-4 bg-gradient-to-r from-amberGold-600 via-amberGold-500 to-amberGold-600 hover:from-amberGold-500 hover:to-amberGold-400 text-black font-cinzel font-black text-lg rounded-xl tracking-wider uppercase transition-all duration-200 transform active:scale-95 gold-glow flex items-center justify-center gap-3">
+              <i class="fa-solid fa-dice-d20 text-2xl"></i>
+              <span>Rolar combo de ataque</span>
+            </button>
+          </div>
+
+          <div class="bg-dungeon-900 panel-frame p-5 rounded-xl">
+            <h3 class="font-cinzel text-sm font-bold text-slate-300 mb-3 flex items-center gap-2">
+              <i class="fa-solid fa-dice text-amberGold-400"></i> Adicionar Dados Avulsos ou Bônus
+            </h3>
+
+            <div class="grid grid-cols-4 sm:grid-cols-7 gap-2">
+              <button onclick="adicionarDadoAvulso('1d4')"
+                class="p-2.5 bg-dungeon-800 hover:bg-dungeon-700 border border-dungeon-700 hover:border-amberGold-500/50 rounded-lg text-center font-mono font-bold text-xs text-amber-200 transition">+1d4</button>
+              <button onclick="adicionarDadoAvulso('1d6')"
+                class="p-2.5 bg-dungeon-800 hover:bg-dungeon-700 border border-dungeon-700 hover:border-amberGold-500/50 rounded-lg text-center font-mono font-bold text-xs text-amber-200 transition">+1d6</button>
+              <button onclick="adicionarDadoAvulso('1d8')"
+                class="p-2.5 bg-dungeon-800 hover:bg-dungeon-700 border border-dungeon-700 hover:border-amberGold-500/50 rounded-lg text-center font-mono font-bold text-xs text-amber-200 transition">+1d8</button>
+              <button onclick="adicionarDadoAvulso('1d10')"
+                class="p-2.5 bg-dungeon-800 hover:bg-dungeon-700 border border-dungeon-700 hover:border-amberGold-500/50 rounded-lg text-center font-mono font-bold text-xs text-amber-200 transition">+1d10</button>
+              <button onclick="adicionarDadoAvulso('1d12')"
+                class="p-2.5 bg-dungeon-800 hover:bg-dungeon-700 border border-dungeon-700 hover:border-amberGold-500/50 rounded-lg text-center font-mono font-bold text-xs text-amber-200 transition">+1d12</button>
+              <button onclick="adicionarDadoAvulso('1d20')"
+                class="p-2.5 bg-dungeon-800 hover:bg-dungeon-700 border border-dungeon-700 hover:border-amberGold-500/50 rounded-lg text-center font-mono font-bold text-xs text-amber-200 transition">+1d20</button>
+            </div>
+
+            <div class="flex items-center gap-2 mt-3 pt-3 border-t border-dungeon-800">
+              <span class="text-xs text-slate-400 font-cinzel">Bônus Fixo:</span>
+              <button onclick="adicionarModificador(-1)"
+                class="px-3 py-1 bg-dungeon-800 hover:bg-dungeon-700 rounded text-slate-300 font-mono text-xs font-bold border border-dungeon-700">-1</button>
+              <button onclick="adicionarModificador(1)"
+                class="px-3 py-1 bg-dungeon-800 hover:bg-dungeon-700 rounded text-slate-300 font-mono text-xs font-bold border border-dungeon-700">+1</button>
+              <button onclick="adicionarModificador(2)"
+                class="px-3 py-1 bg-dungeon-800 hover:bg-dungeon-700 rounded text-slate-300 font-mono text-xs font-bold border border-dungeon-700">+2</button>
+              <button onclick="adicionarModificador(5)"
+                class="px-3 py-1 bg-dungeon-800 hover:bg-dungeon-700 rounded text-slate-300 font-mono text-xs font-bold border border-dungeon-700">+5</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-6">
+          <div id="latest-result-card" class="bg-dungeon-900 panel-frame p-5 rounded-xl text-center">
+            <h3 class="font-cinzel text-xs uppercase tracking-wider text-slate-400 mb-1">Resultado</h3>
+            <div id="total-result-number" class="font-cinzel font-black text-5xl sm:text-6xl text-amberGold-400 my-2">--
+            </div>
+            <div id="result-summary-text" class="text-xs font-mono text-slate-400">Aguardando rolagem...</div>
+            <div id="result-breakdown"
+              class="mt-4 pt-4 border-t border-dungeon-800 text-left space-y-2 text-xs font-mono"></div>
+          </div>
+
+          <div class="bg-dungeon-900 panel-frame p-5 rounded-xl">
+            <h3 class="font-cinzel text-sm font-bold text-slate-300 mb-3 flex items-center justify-between">
+              <span class="flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left text-amberGold-500"></i>
+                Crônica de Lançamentos</span>
+              <button onclick="limparHistorico()"
+                class="text-[10px] text-slate-500 hover:text-slate-300">Limpar</button>
+            </h3>
+            <div id="history-container" class="space-y-2 max-h-60 overflow-y-auto pr-1">
+              <div class="text-xs text-slate-500 italic text-center py-4">Nenhum lançamento recente.</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <div id="item-popover" class="hidden rpg-modal sheet-item-modal" role="dialog" aria-modal="true"
+    aria-labelledby="popover-title" tabindex="-1">
+    <div class="rpg-modal-panel">
+      <div class="flex justify-between items-start mb-1">
+        <h4 id="popover-title" class="font-cinzel font-bold text-sm text-amberGold-300">Espada</h4>
+        <button type="button" id="item-close" aria-label="Fechar detalhes do item" onclick="fecharItemPopover()"
+          class="text-slate-400 hover:text-white text-xs p-1">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div id="popover-tags" class="flex flex-wrap gap-1 mb-2 text-[10px] font-mono"></div>
+
+      <!-- Quantidade (só aparece para itens empilháveis: maxStack > 1) -->
+      <div id="popover-qty-row"
+        class="hidden flex items-center justify-between mb-2 text-[11px] font-mono text-slate-300">
+        <span>Quantidade: <strong id="popover-qty-label" class="text-amberGold-400">1/1</strong></span>
+        <span class="flex gap-1">
+          <button type="button" onclick="ajustarQuantidadeItemAtual(-1)" title="Diminuir quantidade"
+            class="w-6 h-6 rounded bg-dungeon-800 hover:bg-amberGold-600 hover:text-black border border-dungeon-700 transition">−</button>
+          <button type="button" onclick="ajustarQuantidadeItemAtual(1)" title="Aumentar quantidade"
+            class="w-6 h-6 rounded bg-dungeon-800 hover:bg-amberGold-600 hover:text-black border border-dungeon-700 transition">+</button>
+        </span>
+      </div>
+
+      <p id="popover-desc" class="text-xs text-slate-300 mb-3 leading-relaxed">Descrição do item.</p>
+
+      <!-- Ações do Popover -->
+      <div class="space-y-1.5">
+        <div class="grid grid-cols-2 gap-1.5" id="popover-hand-btns">
+          <button id="popover-equip-main" onclick="equiparItemAtual('mainHand')"
+            class="py-1 px-2 bg-dungeon-800 hover:bg-amberGold-600 hover:text-black text-amber-200 text-[11px] font-cinzel rounded border border-dungeon-700 transition">
+            Mão Principal
+          </button>
+          <button id="popover-equip-off" onclick="equiparItemAtual('offHand')"
+            class="py-1 px-2 bg-dungeon-800 hover:bg-amberGold-600 hover:text-black text-amber-200 text-[11px] font-cinzel rounded border border-dungeon-700 transition">
+            Mão Secundária
+          </button>
+        </div>
+        <button id="popover-equip-back" onclick="equiparItemAtual('back')"
+          class="w-full py-1 px-2 bg-dungeon-800 hover:bg-amberGold-600 hover:text-black text-amber-200 text-[11px] font-cinzel rounded border border-dungeon-700 transition">
+          Equipar nas Costas
+        </button>
+
+        <button id="popover-equip-backpack" onclick="equiparItemAtual('backpack')"
+          class="hidden w-full py-1 px-2 bg-amberGold-700/80 hover:bg-amberGold-500 hover:text-black text-white text-[11px] font-cinzel rounded border border-amberGold-600 transition font-bold">
+          <i class="fa-solid fa-backpack mr-1"></i> Equipar como Mochila Ativa
+        </button>
+
+        <button id="popover-add-combo" onclick="enviarItemAtualParaCombo()"
+          class="w-full py-1.5 bg-amberGold-600 hover:bg-amberGold-500 text-black font-cinzel font-black text-xs rounded transition flex items-center justify-center gap-1.5 shadow">
+          <i class="fa-solid fa-burst"></i> Adicionar ao Combo (<span id="popover-dice-preview">2d5</span>)
+        </button>
+
+        <label class="rpg-field sheet-discard-quantity">Quantidade a descartar
+          <input id="popover-discard-qty" type="number" min="1" value="1" class="rpg-input"
+            oninput="atualizarBotaoDescarte()">
+        </label>
+        <button id="popover-discard-button" type="button" onclick="descartarItemAtual()"
+          class="rpg-btn rpg-btn--danger w-full">
+          Descartar 1 unidade…
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE TROCA DE AVATAR -->
+  <div id="avatar-arquivo-modal" class="hidden rpg-modal" role="dialog" aria-modal="true" aria-labelledby="avatar-arquivo-titulo" tabindex="-1">
+    <form id="avatar-arquivo-form" class="rpg-modal-panel">
+      <h3 id="avatar-arquivo-titulo">Escolher foto</h3>
+      <p>Coloque a imagem em <strong>imagens/players/</strong> e informe o nome com a extensão.</p>
+      <label for="avatar-arquivo-nome">Nome do arquivo</label>
+      <input id="avatar-arquivo-nome" class="rpg-input" placeholder="personagem.png" required maxlength="200" autocomplete="off" aria-describedby="avatar-arquivo-erro">
+      <p id="avatar-arquivo-erro" role="status"></p>
+      <div class="retrato-acoes">
+        <button type="button" onclick="RPGUI.fecharModal('avatar-arquivo-modal')">Cancelar</button>
+        <button type="submit">Usar imagem</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- MODAL DO CÓDICE: buscar no catálogo / criar magia ou habilidade -->
+  <div id="codice-modal" class="hidden rpg-modal" role="dialog" aria-modal="true" aria-labelledby="codice-modal-titulo"
+    tabindex="-1">
+    <div class="rpg-modal-panel sheet-codice-panel">
+      <div class="flex items-center justify-between p-5 pb-3">
+        <h3 id="codice-modal-titulo" class="font-cinzel text-lg font-bold text-amberGold-400 flex items-center gap-2">
+          <i class="fa-solid fa-book-skull"></i> <span>Habilidades</span>
+        </h3>
+        <button type="button" onclick="fecharModalCodice()" title="Fechar" aria-label="Fechar editor de poderes"
+          class="text-slate-400 hover:text-white px-2"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <label class="sheet-modal-type">Tipo de poder
+        <select id="codice-tipo-entrada" onchange="definirTipoEdicaoCodice(this.value)" class="rpg-input">
+          <option value="habilidades">Habilidade</option>
+        </select>
+      </label>
+      <div id="codice-modos" class="flex gap-2 px-5 pb-3">
+        <button type="button" id="codice-modo-catalogo" onclick="definirModoCodice('catalogo')"
+          class="px-3 py-1 text-xs font-cinzel font-bold rounded border transition">Catálogo</button>
+        <button type="button" id="codice-modo-criar" onclick="definirModoCodice('criar')"
+          class="px-3 py-1 text-xs font-cinzel font-bold rounded border transition">Criar nova</button>
+      </div>
+
+      <!-- Painel: catálogo -->
+      <div id="codice-painel-catalogo" class="px-5 pb-5 flex flex-col min-h-0">
+        <label for="codice-busca" class="rpg-sr-only">Buscar no catálogo</label>
+        <input type="text" id="codice-busca" oninput="renderizarResultadosCatalogo()" autocomplete="off"
+          placeholder="Buscar por nome, descrição, dano ou ação..."
+          class="w-full bg-dungeon-800 border border-dungeon-700 focus:border-amberGold-500 rounded p-2.5 text-xs text-slate-200 focus:outline-none mb-3">
+        <div id="codice-resultados" class="overflow-y-auto space-y-2 pr-1 min-h-[8rem]"></div>
+      </div>
+
+      <div id="codice-painel-edicao" class="hidden px-5 pb-5">
+        <label class="block mb-3">Descrição<textarea id="codice-texto-desc" rows="5" maxlength="2000"
+            class="rpg-input w-full"></textarea></label>
+        <label class="block mb-3">Anotações pessoais<textarea id="codice-texto-notas" rows="5" maxlength="2000"
+            class="rpg-input w-full" placeholder="Lembretes, estratégias e observações…"></textarea></label>
+        <div class="flex justify-end gap-2"><button type="button" class="rpg-btn"
+            onclick="fecharModalCodice()">Cancelar</button><button type="button" class="rpg-btn rpg-btn--primary"
+            onclick="criarEntradaCodice()">Salvar alterações</button></div>
+      </div>
+      <!-- Painel: criar -->
+      <div id="codice-painel-criar" class="hidden px-5 pb-5 overflow-y-auto">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <label class="sm:col-span-2 text-slate-400">Nome *
+            <input type="text" id="codice-f-nome" maxlength="80"
+              class="mt-1 w-full bg-dungeon-800 border border-dungeon-700 focus:border-amberGold-500 rounded p-2 text-slate-200 focus:outline-none">
+          </label>
+          <label class="text-slate-400">Ícone
+            <select id="codice-f-icone"
+              class="mt-1 w-full bg-dungeon-800 border border-dungeon-700 rounded p-2 text-slate-200 focus:outline-none">
+              <option value="fa-bolt">Raio</option>
+              <option value="fa-fire">Fogo</option>
+              <option value="fa-snowflake">Gelo</option>
+              <option value="fa-wind">Vento</option>
+              <option value="fa-droplet">Água / Sangue</option>
+              <option value="fa-skull">Morte</option>
+              <option value="fa-ghost">Espectro</option>
+              <option value="fa-eye">Olho</option>
+              <option value="fa-gavel">Impacto</option>
+              <option value="fa-shield-halved">Defesa</option>
+              <option value="fa-heart-pulse">Cura</option>
+              <option value="fa-hand-sparkles">Toque</option>
+              <option value="fa-wand-magic-sparkles">Magia</option>
+            </select>
+          </label>
+          <label class="text-slate-400">Dados (opcional)
+            <input type="text" id="codice-f-dados" data-validar-dados="poder" maxlength="30"
+              placeholder="ex.: 1d6+1d4+2"
+              class="mt-1 w-full bg-dungeon-800 border border-dungeon-700 focus:border-amberGold-500 rounded p-2 text-slate-200 focus:outline-none font-mono">
+          </label>
+          <label class="text-slate-400">Tipo de dano
+            <input type="text" id="codice-f-dano" maxlength="40" placeholder="ex.: Fogo"
+              class="mt-1 w-full bg-dungeon-800 border border-dungeon-700 focus:border-amberGold-500 rounded p-2 text-slate-200 focus:outline-none">
+          </label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="text-slate-400">Custo
+              <select id="codice-f-custo-vital"
+                class="mt-1 w-full bg-dungeon-800 border border-dungeon-700 rounded p-2 text-slate-200 focus:outline-none">
+                <option value="">Nenhum</option>
+                <option value="hp">HP</option>
+                <option value="vigor">Vigor</option>
+                <option value="sanity">Sanidade</option>
+              </select>
+            </label>
+            <label class="text-slate-400">Valor
+              <input type="number" id="codice-f-custo-valor" min="0" max="999" value="0"
+                class="mt-1 w-full bg-dungeon-800 border border-dungeon-700 focus:border-amberGold-500 rounded p-2 text-slate-200 focus:outline-none font-mono">
+            </label>
+          </div>
+          <label class="text-slate-400">Ação
+            <input type="text" id="codice-f-acao" maxlength="60" placeholder="ex.: Ação Rápida"
+              class="mt-1 w-full bg-dungeon-800 border border-dungeon-700 focus:border-amberGold-500 rounded p-2 text-slate-200 focus:outline-none">
+          </label>
+          <label class="text-slate-400">Alcance
+            <input type="text" id="codice-f-alcance" maxlength="60" placeholder="ex.: 10m"
+              class="mt-1 w-full bg-dungeon-800 border border-dungeon-700 focus:border-amberGold-500 rounded p-2 text-slate-200 focus:outline-none">
+          </label>
+          <label class="sm:col-span-2 text-slate-400">Descrição
+            <textarea id="codice-f-desc" rows="3" maxlength="2000"
+              class="mt-1 w-full bg-dungeon-800 border border-dungeon-700 focus:border-amberGold-500 rounded p-2 text-slate-200 focus:outline-none"></textarea>
+          </label>
+        </div>
+        <p id="codice-f-erro" role="alert" class="hidden mt-3 text-xs text-rose-400"></p>
+        <div class="flex justify-end gap-2 mt-4">
+          <button type="button" onclick="fecharModalCodice()"
+            class="px-4 py-1.5 text-xs text-slate-300 hover:bg-dungeon-800 rounded transition">Cancelar</button>
+          <button id="codice-confirmar" type="button" onclick="criarEntradaCodice()"
+            class="px-4 py-1.5 text-xs bg-amberGold-600 hover:bg-amberGold-500 text-black font-cinzel font-bold rounded transition">Adicionar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- A ordem importa: cada arquivo usa o que os anteriores declaram (scripts comuns, tudo é global).
+       regras = regras compartilhadas com o servidor; estado = identidade/socket/STATE; index = inicialização (por último). -->
+  <script src="JS/interface.js"></script>
+  <script src="JS/regras.js"></script>
+  <script src="JS/fundos-poderes.js"></script>
+  <script src="JS/recorte-retrato.js"></script>
+  <script src="JS/editor-imagem.js"></script>
+  <script src="JS/estado.js"></script>
+  <script src="JS/ui.js"></script>
+  <script src="JS/salvamento.js"></script>
+  <script src="JS/ficha-campos.js"></script>
+  <script src="JS/vitais.js"></script>
+  <script src="JS/pericias.js"></script>
+  <script src="JS/codice.js"></script>
+  <script src="JS/inventario.js"></script>
+  <script src="JS/bau.js"></script>
+  <script src="JS/dados.js"></script>
+  <script src="JS/conexao.js"></script>
+  <script src="JS/index.js"></script>
+</body>
+
+</html>

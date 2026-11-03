@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b1118">
+  <title>Entrar — Grimório RPG</title>
+  <link rel="stylesheet" href="/CSS/rpg-ui.css">
+  <link rel="stylesheet" href="/CSS/acesso.css">
+</head>
+<body class="rpg-app">
+  <a class="rpg-skip" href="#login-form">Pular para o formulário</a>
+  <div class="access-shell">
+    <header class="rpg-topbar">
+      <div class="rpg-topbar-inner">
+        <div class="rpg-brand" aria-label="Grimório RPG">
+          <span class="rpg-sigil"><svg class="rpg-icon" aria-hidden="true"><use href="/CSS/icones.svg#book"></use></svg></span>
+          <span class="rpg-brand-name">Grimório<span class="rpg-brand-caption">RPG · Ficha de campanha</span></span>
+        </div>
+        <span class="rpg-hint">Acesso do jogador</span>
+      </div>
+    </header>
+    <main class="login-main">
+      <section class="login-story" aria-labelledby="welcome-title">
+        <span class="rpg-eyebrow">Sua próxima sessão</span>
+        <h1 id="welcome-title">Toda história começa com <em>um personagem.</em></h1>
+        <p>Abra sua ficha, reúna seus recursos e volte à aventura. O próximo capítulo é seu.</p>
+        <div class="login-rule" aria-hidden="true"></div>
+        <div class="login-story-foot"><svg class="rpg-icon" aria-hidden="true"><use href="/CSS/icones.svg#book"></use></svg><span>Sua história. Sua ficha. Sua mesa.</span></div>
+      </section>
+      <section class="rpg-card login-card" aria-labelledby="login-title">
+        <span class="rpg-eyebrow">Bem-vindo à mesa</span>
+        <h2 id="login-title">Entrar no Grimório</h2>
+        <p>Use sua conta para escolher um personagem.</p>
+        <form novalidate id="login-form" class="login-form">
+          <div class="rpg-field">
+            <label for="player-name">Nome do jogador</label>
+            <input id="player-name" class="rpg-input" name="nome" required maxlength="40" autocomplete="username" placeholder="Seu nome de acesso" autocapitalize="none" spellcheck="false">
+          </div>
+          <div class="rpg-field">
+            <label for="player-password">Senha</label>
+            <input id="player-password" class="rpg-input" name="senha" type="password" required autocomplete="current-password" placeholder="Sua senha">
+          </div>
+          <p id="login-message" class="rpg-message" role="status" aria-live="polite" aria-atomic="true"></p>
+          <div class="login-actions">
+            <button id="login-button" class="rpg-btn rpg-btn--primary" type="submit">Entrar <svg class="rpg-icon" aria-hidden="true"><use href="/CSS/icones.svg#arrow"></use></svg></button>
+            <button id="create-account-button" class="rpg-btn" type="button">Criar conta</button>
+          </div>
+        </form>
+        <p class="login-form-note">Primeira aventura? Preencha nome e senha e escolha “Criar conta”.</p>
+      </section>
+    </main>
+    <footer class="access-footer">Grimório RPG · Histórias ganham vida à mesa.</footer>
+  </div>
+  <script src="/JS/interface.js"></script>
+  <script>
+    const form = document.getElementById('login-form');
+    const message = document.getElementById('login-message');
+    let autenticando = false;
+
+    async function autenticar(criarSeNaoExistir) {
+      if (autenticando || !RPGUI.validarFormulario(form)) return;
+      const nome = document.getElementById('player-name').value.trim();
+      const senha = document.getElementById('player-password').value;
+      if (!nome) {
+        RPGUI.mensagem(message, 'Informe o nome do jogador.', 'error');
+        document.getElementById('player-name').focus();
+        return;
+      }
+      autenticando = true;
+      const entrar = document.getElementById('login-button');
+      const criar = document.getElementById('create-account-button');
+      entrar.disabled = criar.disabled = true;
+      form.setAttribute('aria-busy', 'true');
+      RPGUI.mensagem(message, criarSeNaoExistir ? 'Criando sua conta…' : 'Entrando na sua conta…', 'loading');
+
+      try {
+        const { response, result } = await RPGUI.pedirJSON('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nome, senha, criarSeNaoExistir }),
+        });
+        if (!response.ok || !result.success) {
+          RPGUI.mensagem(message, result.message || 'Não foi possível entrar.', 'error');
+          return;
+        }
+
+        sessionStorage.setItem('rpg_player', result.player);
+        sessionStorage.setItem('rpg_token', result.token);
+        sessionStorage.removeItem('rpg_character');
+        sessionStorage.removeItem('rpg_character_name');
+        window.location.assign('/selecao');
+      } catch (error) {
+        RPGUI.mensagem(message, criarSeNaoExistir
+          ? 'Não foi possível confirmar a criação da conta. Tente Entrar com os mesmos dados antes de criar novamente.'
+          : 'Não foi possível confirmar o login em tempo hábil. Confira a conexão e tente Entrar novamente.', 'error');
+      } finally {
+        autenticando = false;
+        entrar.disabled = criar.disabled = false;
+        form.setAttribute('aria-busy', 'false');
+      }
+    }
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      autenticar(false);
+    });
+    document.getElementById('create-account-button').addEventListener('click', () => {
+      autenticar(true);
+    });
+  </script>
+</body>
+</html>
